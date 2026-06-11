@@ -8,6 +8,7 @@ from google.genai import types
 
 import t3.tools.gcal  # noqa: F401 — triggers @tool registration
 import t3.tools.intervals  # noqa: F401 — triggers @tool registration
+import t3.tools.plan  # noqa: F401 — triggers @tool registration
 from t3.config import settings
 from t3.tools.registry import REGISTRY
 
