@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any
 
 from google import genai
@@ -45,7 +46,10 @@ async def _try_model(
             if any(code in msg for code in _RETRYABLE) and attempt < 3:
                 logger.warning(
                     "Gemini %s transient error (attempt %d/3), retrying in %.0fs: %s",
-                    model, attempt + 1, delay, msg[:120],
+                    model,
+                    attempt + 1,
+                    delay,
+                    msg[:120],
                 )
                 await asyncio.sleep(delay)
                 delay *= 2
@@ -58,7 +62,7 @@ async def generate_response(
     contents: list,
     config: types.GenerateContentConfig,
 ):
-    """Try the primary model; fall back to gemini_fallback_model on 503/404."""
+    """Try the primary model; fall back to `gemini_fallback_model` on `503`/`404`."""
     try:
         return await _try_model(client, settings.gemini_model, contents, config)
     except Exception as exc:
@@ -66,7 +70,9 @@ async def generate_response(
         if fallback and fallback != settings.gemini_model and any(c in str(exc) for c in _FALLBACK_CODES):
             logger.warning(
                 "Primary model %s unavailable (%s), falling back to %s",
-                settings.gemini_model, str(exc)[:80], fallback,
+                settings.gemini_model,
+                str(exc)[:80],
+                fallback,
             )
             return await _try_model(client, fallback, contents, config)
         raise
@@ -79,8 +85,17 @@ async def run(text: str, client: genai.Client) -> str:
     repeats until Gemini produces a final text answer (no more function
     calls) or the turn limit is hit.
     """
+    now = datetime.now().strftime("%A, %d %B %Y %H:%M")
     contents: list = [text]
-    config = types.GenerateContentConfig(tools=REGISTRY.functions)
+    config = types.GenerateContentConfig(
+        tools=REGISTRY.functions,
+        system_instruction=(
+            f"You are T3, a personal triathlon training assistant. "
+            f"The current date and time is {now}. "
+            "When the user refers to relative dates (today, tomorrow, next Monday, etc.) "
+            "resolve them to exact dates before calling any tools."
+        ),
+    )
 
     for _ in range(_MAX_TURNS):
         response = await generate_response(client, contents, config)
