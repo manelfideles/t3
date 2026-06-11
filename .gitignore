@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+pytest-results.xml
+*.cover
+.hypothesis/
+.pytest_cache
+
+# dotenv
+.env
+
+# virtualenv
+.venv
+
+# IDE Config files
+.vscode/
+.idea
+.vim
+
+# OS files
+.DS_Store
+
+# Project-specific
+.ruff_cache/
+
+# Data/Artifacts
+.agents
+*.db

@@ -1,0 +1,34 @@
+from typing import Any
+
+from t3.intervals import (
+    create_planned_workout as _create_planned_workout,
+    get_activities as _get_activities,
+)
+
+
+def get_activities(limit: int = 10) -> list[dict[str, Any]]:
+    """Retrieve recent Intervals.icu activities.
+
+    Args:
+        limit: Maximum number of activities to return (default 10)
+    """
+    return _get_activities(limit)
+
+
+def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
+    """Write a planned workout to Intervals.icu.
+
+    Args:
+        date: ISO date string (e.g. '2026-06-11')
+        type: Workout type (Swim, Bike, Run)
+        description: Workout description
+    """
+    return _create_planned_workout(date, type, description)
+
+
+INTERVALS_FUNCTIONS = [get_activities, create_planned_workout]
+
+INTERVALS_HANDLERS: dict[str, Any] = {
+    "get_activities": get_activities,
+    "create_planned_workout": create_planned_workout,
+}
