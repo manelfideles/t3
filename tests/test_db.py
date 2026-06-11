@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from t3.db import EXPECTED_TABLES, get_tables, init_db
+from t3.db import EXPECTED_TABLES, TrainingPlanRepo, get_tables, init_db
 
 
 def test_schema_creates_all_five_tables() -> None:
@@ -37,3 +37,46 @@ def test_init_db_is_idempotent() -> None:
     # Running schema again should not raise or duplicate tables
     conn.executescript("CREATE TABLE IF NOT EXISTS athlete_profile (id INTEGER PRIMARY KEY AUTOINCREMENT);")
     assert get_tables(conn) == EXPECTED_TABLES
+
+
+def test_training_plan_repo_insert_and_load_latest() -> None:
+    conn = init_db()
+    repo = TrainingPlanRepo(conn)
+
+    repo.insert("Base", '{"weeks":8}', '[]')
+    repo.insert("Build", '{"weeks":6}', '[]')
+    repo.insert("Peak", '{"weeks":3}', '[]')
+    repo.insert("Race", '{"weeks":1}', '[]')
+
+    rows = repo.load_latest()
+    assert len(rows) == 4
+    assert [r.phase for r in rows] == ["Base", "Build", "Peak", "Race"]
+    assert rows[0].blocks_json == '{"weeks":8}'
+
+
+def test_training_plan_repo_load_latest_returns_empty_when_no_rows() -> None:
+    conn = init_db()
+    repo = TrainingPlanRepo(conn)
+    assert repo.load_latest() == []
+
+
+def test_training_plan_repo_load_latest_returns_most_recent_batch() -> None:
+    """load_latest groups by created_at; only the latest timestamp batch is returned."""
+    conn = init_db()
+    repo = TrainingPlanRepo(conn)
+
+    # First batch — insert with an explicit older timestamp
+    conn.execute(
+        "INSERT INTO training_plan (phase, blocks_json, sessions_json, created_at) VALUES (?, ?, ?, ?)",
+        ("Base", "{}", "[]", "2026-01-01 00:00:00"),
+    )
+    conn.commit()
+
+    # Second batch — inserted via repo (uses CURRENT_TIMESTAMP)
+    repo.insert("Base", '{"weeks":8}', "[]")
+    repo.insert("Build", '{"weeks":6}', "[]")
+
+    rows = repo.load_latest()
+    assert len(rows) == 2
+    assert rows[0].phase == "Base"
+    assert rows[1].phase == "Build"
