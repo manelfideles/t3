@@ -112,5 +112,5 @@ def test_generate_training_plan_registered_in_registry() -> None:
     import t3.tools.plan  # noqa: F401
     from t3.tools.registry import REGISTRY
 
-    names = [fn.__name__ for fn in REGISTRY.functions]
+    names = [getattr(fn, "__name__", None) for fn in REGISTRY.functions]
     assert "generate_training_plan" in names
