@@ -1,6 +1,14 @@
+import logging
+
+from t3.bot import create_app
+
+logging.basicConfig(level=logging.INFO)
+
+
 def main() -> None:
-    print("T3 — Triathlon Training Agent")
-    print("Set TELEGRAM_TOKEN and GEMINI_API_KEY, then run with: python -m t3")
+    app = create_app()
+    print("T3 bot starting — press Ctrl+C to stop")
+    app.run_polling()
 
 
 if __name__ == "__main__":
