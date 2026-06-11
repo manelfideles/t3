@@ -4,8 +4,10 @@ from t3.intervals import (
     create_planned_workout as _create_planned_workout,
     get_activities as _get_activities,
 )
+from t3.tools.registry import tool
 
 
+@tool
 def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     """Retrieve recent Intervals.icu activities.
 
@@ -15,6 +17,7 @@ def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     return _get_activities(limit)
 
 
+@tool
 def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
     """Write a planned workout to Intervals.icu.
 
@@ -24,11 +27,3 @@ def create_planned_workout(date: str, type: str, description: str) -> dict[str, 
         description: Workout description
     """
     return _create_planned_workout(date, type, description)
-
-
-INTERVALS_FUNCTIONS = [get_activities, create_planned_workout]
-
-INTERVALS_HANDLERS: dict[str, Any] = {
-    "get_activities": get_activities,
-    "create_planned_workout": create_planned_workout,
-}

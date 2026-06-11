@@ -1,17 +1,9 @@
 from unittest.mock import patch
 
-from t3.tools.gcal_tools import (
-    GCAL_FUNCTIONS,
-    GCAL_HANDLERS,
-    create_gcal_event,
-    get_gcal_events,
-)
-from t3.tools.intervals_tools import (
-    INTERVALS_FUNCTIONS,
-    INTERVALS_HANDLERS,
-    create_planned_workout,
-    get_activities,
-)
+from t3.tools.gcal_tools import create_gcal_event, get_gcal_events
+from t3.tools.intervals_tools import create_planned_workout, get_activities
+from t3.tools.registry import REGISTRY
+
 
 # --- gcal tool interface (mocked client) ---
 
@@ -59,26 +51,31 @@ def test_create_planned_workout_returns_dict() -> None:
     assert result == fake
 
 
-# --- manifest shape ---
+# --- registry manifest ---
 
-def test_gcal_functions_are_callables() -> None:
-    assert len(GCAL_FUNCTIONS) == 2
-    for f in GCAL_FUNCTIONS:
-        assert callable(f)
-
-
-def test_intervals_functions_are_callables() -> None:
-    assert len(INTERVALS_FUNCTIONS) == 2
-    for f in INTERVALS_FUNCTIONS:
-        assert callable(f)
+def test_registry_contains_all_four_tools() -> None:
+    names = {f.__name__ for f in REGISTRY.functions}
+    assert names >= {"get_gcal_events", "create_gcal_event", "get_activities", "create_planned_workout"}
 
 
-def test_all_handlers_are_callable() -> None:
-    for name, handler in {**GCAL_HANDLERS, **INTERVALS_HANDLERS}.items():
-        assert callable(handler), f"Handler {name!r} is not callable"
+def test_registry_functions_are_callable() -> None:
+    for fn in REGISTRY.functions:
+        assert callable(fn)
 
 
-# --- dispatch ---
+def test_registry_dispatch_calls_handler() -> None:
+    with patch("t3.tools.intervals_tools._get_activities", return_value=[{"id": "a1"}]) as mock:
+        result = REGISTRY.dispatch("get_activities", {"limit": 3})
+    mock.assert_called_once_with(3)
+    assert result == [{"id": "a1"}]
+
+
+def test_registry_dispatch_unknown_returns_error_string() -> None:
+    result = REGISTRY.dispatch("nonexistent_tool", {})
+    assert "unknown tool" in str(result).lower()
+
+
+# --- agent dispatch ---
 
 def test_dispatch_unknown_tool_returns_error_string() -> None:
     from t3.agent import dispatch_tool

@@ -1,8 +1,10 @@
 from typing import Any
 
 from t3.gcal import create_event as _create_event, list_events as _list_events
+from t3.tools.registry import tool
 
 
+@tool
 def get_gcal_events(time_min: str = "", time_max: str = "") -> list[dict[str, Any]]:
     """List Google Calendar events within a time range.
 
@@ -13,6 +15,7 @@ def get_gcal_events(time_min: str = "", time_max: str = "") -> list[dict[str, An
     return _list_events(time_min, time_max)
 
 
+@tool
 def create_gcal_event(summary: str, start: str, end: str) -> dict[str, Any]:
     """Create a Google Calendar event.
 
@@ -22,11 +25,3 @@ def create_gcal_event(summary: str, start: str, end: str) -> dict[str, Any]:
         end: RFC3339 end datetime
     """
     return _create_event(summary, start, end)
-
-
-GCAL_FUNCTIONS = [get_gcal_events, create_gcal_event]
-
-GCAL_HANDLERS: dict[str, Any] = {
-    "get_gcal_events": get_gcal_events,
-    "create_gcal_event": create_gcal_event,
-}

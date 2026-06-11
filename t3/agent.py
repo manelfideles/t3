@@ -5,13 +5,11 @@ from google import genai
 from google.genai import types
 
 from t3.config import settings
-from t3.tools.gcal_tools import GCAL_FUNCTIONS, GCAL_HANDLERS
-from t3.tools.intervals_tools import INTERVALS_FUNCTIONS, INTERVALS_HANDLERS
+import t3.tools.gcal_tools  # noqa: F401 — registers gcal tools on import
+import t3.tools.intervals_tools  # noqa: F401 — registers intervals tools on import
+from t3.tools.registry import REGISTRY
 
 logger = logging.getLogger(__name__)
-
-ALL_FUNCTIONS = GCAL_FUNCTIONS + INTERVALS_FUNCTIONS
-ALL_HANDLERS: dict[str, Any] = {**GCAL_HANDLERS, **INTERVALS_HANDLERS}
 
 _MAX_TURNS = 10
 
@@ -21,10 +19,7 @@ def build_client() -> genai.Client:
 
 
 def dispatch_tool(name: str, args: dict[str, Any]) -> Any:
-    handler = ALL_HANDLERS.get(name)
-    if handler is None:
-        return f"[unknown tool: {name}]"
-    return handler(**args)
+    return REGISTRY.dispatch(name, args)
 
 
 async def run(text: str, client: genai.Client) -> str:
@@ -35,7 +30,7 @@ async def run(text: str, client: genai.Client) -> str:
     calls) or the turn limit is hit.
     """
     contents: list = [text]
-    config = types.GenerateContentConfig(tools=ALL_FUNCTIONS)
+    config = types.GenerateContentConfig(tools=REGISTRY.functions)
 
     for _ in range(_MAX_TURNS):
         response = client.models.generate_content(
