@@ -1,0 +1,33 @@
+[project]
+name = "t3"
+version = "0.1.0"
+description = "T3 — Triathlon Training Agent: personal AI triathlon coach"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "python-telegram-bot>=21.0",
+    "google-generativeai>=0.8.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-api-python-client>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9",
+    "ty",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests requiring live credentials (gcal, intervals.icu)",
+]
