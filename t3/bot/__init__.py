@@ -10,12 +10,21 @@ from telegram.ext import (
     filters,
 )
 
+from google import genai
+
 from t3.agent import build_client, run
 from t3.config import settings
 
 logger = logging.getLogger(__name__)
 
-_client = build_client()
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = build_client()
+    return _client
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -52,7 +61,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     user_text = update.message.text or ""
     try:
-        reply = await run(user_text, _client)
+        reply = await run(user_text, _get_client())
         await update.message.reply_text(reply or "I didn't get a response. Try again.")
     except Exception as exc:
         logger.exception("Agent error")
