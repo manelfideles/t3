@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from t3.db import EXPECTED_TABLES, TrainingPlanRepo, get_tables, init_db
+from t3.db import EXPECTED_TABLES, AthleteRepo, TrainingPlanRepo, get_tables, init_db
 
 
 def test_schema_creates_all_five_tables() -> None:
@@ -15,6 +15,46 @@ def test_athlete_profile_has_required_columns() -> None:
     cols = {row[1] for row in conn.execute("PRAGMA table_info(athlete_profile)").fetchall()}
     for required in ("name", "age", "sex", "experience_level", "created_at"):
         assert required in cols, f"Missing column: {required}"
+
+
+def test_athlete_profile_has_typed_fitness_columns() -> None:
+    conn = init_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(athlete_profile)").fetchall()}
+    for col in ("ftp_watts", "threshold_run_pace_per_km", "threshold_swim_pace_per_100m", "avg_weekly_hours"):
+        assert col in cols, f"Missing column: {col}"
+
+
+def test_athlete_profile_has_no_freetext_baseline_columns() -> None:
+    conn = init_db()
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(athlete_profile)").fetchall()}
+    for removed in ("swim_baseline", "bike_baseline", "run_baseline"):
+        assert removed not in cols, f"Column should have been removed: {removed}"
+
+
+def test_athlete_repo_save_and_load_typed_fields() -> None:
+    conn = init_db()
+    repo = AthleteRepo(conn)
+    row_id = repo.save_profile(
+        name="Alice",
+        age=32,
+        sex="female",
+        experience_level="intermediate",
+        weekly_hours_json=None,
+        ftp_watts=240,
+        threshold_run_pace_per_km=5.2,
+        threshold_swim_pace_per_100m=2.1,
+        avg_weekly_hours=7.5,
+        upcoming_races_json='[{"name": "City Olympic"}]',
+        injury_history=None,
+    )
+    assert row_id == 1
+    profile = repo.load_latest()
+    assert profile is not None
+    assert profile.ftp_watts == 240
+    assert profile.threshold_run_pace_per_km == pytest.approx(5.2)
+    assert profile.threshold_swim_pace_per_100m == pytest.approx(2.1)
+    assert profile.avg_weekly_hours == pytest.approx(7.5)
+    assert profile.name == "Alice"
 
 
 def test_oauth_tokens_service_unique_constraint() -> None:

@@ -62,10 +62,10 @@ def _build_prompt(profile: AthleteProfileRow, today: date, guide: str) -> str:
 - Age: {profile.age}
 - Sex: {profile.sex}
 - Experience level: {profile.experience_level}
-- Weekly training hours available: {profile.weekly_hours_json}
-- Swim baseline: {profile.swim_baseline}
-- Bike baseline: {profile.bike_baseline}
-- Run baseline: {profile.run_baseline}
+- Average weekly training hours: {profile.avg_weekly_hours}
+- FTP (watts): {profile.ftp_watts}
+- Threshold run pace (min/km): {profile.threshold_run_pace_per_km}
+- Threshold swim pace (min/100m): {profile.threshold_swim_pace_per_100m}
 - Upcoming races (JSON): {profile.upcoming_races_json}
 - Injury history: {profile.injury_history}
 
