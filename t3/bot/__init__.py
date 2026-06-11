@@ -51,6 +51,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await update.message.reply_text(
                 "Gemini API rate limit hit. Wait a minute and try again, or check your quota at aistudio.google.com."
             )
+        elif "503" in msg or "UNAVAILABLE" in msg:
+            await update.message.reply_text(
+                "Gemini is overloaded right now. Try again in a few seconds."
+            )
         else:
             await update.message.reply_text(f"Something went wrong: {exc}")
 
