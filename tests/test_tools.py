@@ -1,3 +1,4 @@
+from typing import Any, cast
 from unittest.mock import patch
 
 from t3.tools.gcal import create_gcal_event, get_gcal_events
@@ -48,7 +49,7 @@ def test_create_planned_workout_returns_dict() -> None:
 
 
 def test_registry_contains_all_four_tools() -> None:
-    names = {f.__name__ for f in REGISTRY.functions}
+    names = {cast(Any, f).__name__ for f in REGISTRY.functions}
     assert names >= {
         "get_gcal_events",
         "create_gcal_event",

@@ -19,6 +19,7 @@ class CredentialStore:
         return TokenRepo(init_db(self._db_path))
 
     def store(self, creds: Credentials) -> None:
+        assert creds.token is not None
         self._repo().store(
             "gcal",
             creds.token,

@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, cast
 
 
 class ToolRegistry:
     def __init__(self) -> None:
-        self._functions: list[Callable] = []
-        self._handlers: dict[str, Callable] = {}
+        self._functions: list[Callable[..., Any]] = []
+        self._handlers: dict[str, Callable[..., Any]] = {}
 
-    def register(self, fn: Callable) -> Callable:
+    def register(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         self._functions.append(fn)
-        self._handlers[fn.__name__] = fn
+        self._handlers[cast(Any, fn).__name__] = fn
         return fn
 
     @property
-    def functions(self) -> list[Callable]:
+    def functions(self) -> list[Callable[..., Any]]:
         return list(self._functions)
 
     def dispatch(self, name: str, args: dict[str, Any]) -> Any:

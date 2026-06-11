@@ -16,15 +16,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Lint
         run: make lint
-
       - name: Format
         run: make lint_fix
-
       - name: Type check
         run: make typecheck
-
       - name: Test
         run: make test

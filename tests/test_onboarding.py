@@ -48,8 +48,9 @@ def test_start_has_no_question() -> None:
 def test_ask_name_has_question() -> None:
     session = OnboardingSession()
     session.state = OnboardingState.ASK_NAME
-    assert session.current_question() is not None
-    assert "name" in session.current_question().lower()  # type: ignore[operator]
+    question = session.current_question()
+    assert question is not None
+    assert "name" in question.lower()
 
 
 def test_advance_stores_answer_and_transitions() -> None:

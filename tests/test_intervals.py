@@ -140,6 +140,7 @@ def test_create_and_verify_workout_live() -> None:
     result = intervals.create_planned_workout(
         date="2026-06-20",
         workout_type="Swim",
+        title="T3 test workout",
         description="T3 test workout — safe to delete",
     )
     assert isinstance(result, dict)

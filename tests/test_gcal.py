@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -50,7 +51,7 @@ def test_client_config_has_correct_keys(monkeypatch: pytest.MonkeyPatch) -> None
     assert "token_uri" in cfg["installed"]
 
 
-def test_store_and_load_tokens_roundtrip(tmp_path: pytest.TempPathFactory) -> None:
+def test_store_and_load_tokens_roundtrip(tmp_path: Path) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
     creds = _fake_creds(expiry=datetime(2026, 12, 31, tzinfo=timezone.utc))
@@ -64,13 +65,13 @@ def test_store_and_load_tokens_roundtrip(tmp_path: pytest.TempPathFactory) -> No
     assert loaded.refresh_token == "refresh-token"
 
 
-def test_load_credentials_returns_none_when_not_connected(tmp_path: pytest.TempPathFactory) -> None:
+def test_load_credentials_returns_none_when_not_connected(tmp_path: Path) -> None:
     db = str(tmp_path / "empty.db")
     init_db(db)
     assert CredentialStore(db).load() is None
 
 
-def test_store_tokens_upserts_on_reconnect(tmp_path: pytest.TempPathFactory) -> None:
+def test_store_tokens_upserts_on_reconnect(tmp_path: Path) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
     store = CredentialStore(db)
@@ -83,7 +84,7 @@ def test_store_tokens_upserts_on_reconnect(tmp_path: pytest.TempPathFactory) -> 
     assert loaded.token == "new-token"
 
 
-def test_store_tokens_handles_missing_expiry(tmp_path: pytest.TempPathFactory) -> None:
+def test_store_tokens_handles_missing_expiry(tmp_path: Path) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
     store = CredentialStore(db)

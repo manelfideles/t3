@@ -164,4 +164,5 @@ class AthleteRepo:
             ),
         )
         self._conn.commit()
-        return cursor.lastrowid  # type: ignore[return-value]
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid

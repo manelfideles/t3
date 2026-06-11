@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from google import genai
 from google.genai import types
@@ -88,7 +88,7 @@ async def run(text: str, client: genai.Client) -> str:
     now = datetime.now().strftime("%A, %d %B %Y %H:%M")
     contents: list = [text]
     config = types.GenerateContentConfig(
-        tools=REGISTRY.functions,
+        tools=cast(list[Any], REGISTRY.functions),
         system_instruction=(
             f"You are T3, a personal triathlon training assistant. "
             f"The current date and time is {now}. "

@@ -2,7 +2,13 @@ import asyncio
 import logging
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from t3.agent import build_client, run
 from t3.config import settings
@@ -13,30 +19,37 @@ _client = build_client()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("Hello, I'm T3 — your triathlon training agent.")
+    if update.message is None:
+        return
+    await update.message.reply_text("Hello! I'm T3, your triathlon training agent.")
 
 
 async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
+    message = update.message
     from t3.integrations import gcal
 
-    await update.message.reply_text(
+    await message.reply_text(
         "Starting Google Calendar authorization.\nA link is coming — click it, approve access, then come back here."
     )
 
     async def send_url(url: str) -> None:
-        await update.message.reply_text(f"Authorize here (link expires in 5 min):\n{url}")
+        await message.reply_text(f"Authorize here (link expires in 5 min):\n{url}")
 
     try:
         await gcal.run_oauth_flow(send_url)
-        await update.message.reply_text("Google Calendar connected.")
+        await message.reply_text("Google Calendar connected.")
     except asyncio.TimeoutError:
-        await update.message.reply_text("Timed out. Send /connect_gcal to try again.")
+        await message.reply_text("Timed out. Send /connect_gcal to try again.")
     except Exception as exc:
         logger.exception("GCal OAuth error")
-        await update.message.reply_text(f"Error: {exc}")
+        await message.reply_text(f"Error: {exc}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
     user_text = update.message.text or ""
     try:
         reply = await run(user_text, _client)
