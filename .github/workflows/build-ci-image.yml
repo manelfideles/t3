@@ -5,6 +5,7 @@ on:
     paths:
       - pyproject.toml
       - Dockerfile.ci
+  workflow_dispatch:
 
 jobs:
   build-and-push:
