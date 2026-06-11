@@ -5,6 +5,7 @@ import pytest
 
 # --- unit tests (mocked httpx) ---
 
+
 def _mock_response(json_data: object, status_code: int = 200) -> MagicMock:
     mock = MagicMock(spec=httpx.Response)
     mock.status_code = status_code
@@ -82,7 +83,7 @@ def test_create_planned_workout_posts_correct_payload(monkeypatch: pytest.Monkey
 
     with patch("t3.integrations.intervals.httpx.Client", return_value=mock_client):
         result = intervals.create_planned_workout(
-            date="2026-06-15", type="Swim", description="2km steady"
+            date="2026-06-15", workout_type="Swim", title="2km steady", description="2x750m @ Z2"
         )
 
     assert result == {"id": "evt1"}
@@ -90,6 +91,7 @@ def test_create_planned_workout_posts_correct_payload(monkeypatch: pytest.Monkey
     assert payload["start_date_local"] == "2026-06-15T08:00:00"
     assert payload["type"] == "Swim"
     assert payload["name"] == "2km steady"
+    assert payload["description"] == "2x750m @ Z2"
     assert payload["category"] == "WORKOUT"
 
 
@@ -112,10 +114,11 @@ def test_get_activities_raises_on_http_error() -> None:
 
 # --- integration tests (require live credentials) ---
 
+
 @pytest.mark.integration
 def test_get_activities_live() -> None:
-    from t3.integrations import intervals
     from t3.config import settings
+    from t3.integrations import intervals
 
     if not settings.intervals_api_key or not settings.intervals_athlete_id:
         pytest.skip("INTERVALS_API_KEY / INTERVALS_ATHLETE_ID not set")
@@ -128,15 +131,15 @@ def test_get_activities_live() -> None:
 
 @pytest.mark.integration
 def test_create_and_verify_workout_live() -> None:
-    from t3.integrations import intervals
     from t3.config import settings
+    from t3.integrations import intervals
 
     if not settings.intervals_api_key or not settings.intervals_athlete_id:
         pytest.skip("INTERVALS_API_KEY / INTERVALS_ATHLETE_ID not set")
 
     result = intervals.create_planned_workout(
         date="2026-06-20",
-        type="Swim",
+        workout_type="Swim",
         description="T3 test workout — safe to delete",
     )
     assert isinstance(result, dict)

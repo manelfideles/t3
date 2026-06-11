@@ -18,12 +18,13 @@ def get_activities(limit: int = 10) -> list[dict[str, Any]]:
 
 
 @tool
-def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
+def create_planned_workout(date: str, type: str, title: str, description: str) -> dict[str, Any]:
     """Write a planned workout to Intervals.icu.
 
     Args:
         date: ISO date string (e.g. '2026-06-11')
         type: Workout type (Swim, Bike, Run)
-        description: Workout description
+        title: Short workout name (e.g. 'Easy run')
+        description: Full workout description
     """
-    return _create_planned_workout(date, type, description)
+    return _create_planned_workout(date, type, title, description)
