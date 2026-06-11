@@ -1,0 +1,33 @@
+name: Build CI image
+
+on:
+  push:
+    paths:
+      - pyproject.toml
+      - Dockerfile.ci
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.ci
+          push: true
+          tags: |
+            ghcr.io/manelfideles/t3-ci:latest
+            ghcr.io/manelfideles/t3-ci:${{ github.sha }}
