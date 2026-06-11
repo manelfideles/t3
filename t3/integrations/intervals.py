@@ -18,6 +18,74 @@ def _url(path: str) -> str:
     return f"{_BASE}/{settings.intervals_athlete_id}/{path}"
 
 
+def get_athlete_settings() -> dict[str, Any]:
+    with httpx.Client() as client:
+        response = client.get(
+            f"{_BASE}/{settings.intervals_athlete_id}",
+            auth=_auth(),
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+def get_events(oldest: str, newest: str) -> list[dict[str, Any]]:
+    with httpx.Client() as client:
+        response = client.get(
+            _url("events"),
+            auth=_auth(),
+            params={"oldest": oldest, "newest": newest},
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data if isinstance(data, list) else []
+
+
+def get_best_efforts(days: int = 28) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    oldest = (now - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+    newest = now.strftime("%Y-%m-%dT%H:%M:%S")
+    with httpx.Client() as client:
+        response = client.get(
+            _url("activities"),
+            auth=_auth(),
+            params={"oldest": oldest, "newest": newest},
+        )
+        response.raise_for_status()
+        activities = response.json()
+
+    if not isinstance(activities, list):
+        return {"avg_weekly_hours": None, "threshold_run_pace_per_km": None, "threshold_swim_pace_per_100m": None}
+
+    total_seconds = sum(a.get("moving_time", 0) or 0 for a in activities)
+    avg_weekly_hours = round(total_seconds / 3600 / (days / 7), 2)
+
+    # Fastest pace from run activities >= 18 min (proxy for threshold effort)
+    run_paces = []
+    for a in activities:
+        if a.get("type") == "Run":
+            dist = a.get("distance", 0) or 0
+            moving_time = a.get("moving_time", 0) or 0
+            if dist > 0 and moving_time >= 1080:
+                run_paces.append((moving_time / 60) / (dist / 1000))
+    threshold_run = round(min(run_paces), 2) if run_paces else None
+
+    # Fastest pace from swim activities >= 300m
+    swim_paces = []
+    for a in activities:
+        if a.get("type") == "Swim":
+            dist = a.get("distance", 0) or 0
+            moving_time = a.get("moving_time", 0) or 0
+            if dist >= 300 and moving_time > 0:
+                swim_paces.append((moving_time / 60) / (dist / 100))
+    threshold_swim = round(min(swim_paces), 2) if swim_paces else None
+
+    return {
+        "avg_weekly_hours": avg_weekly_hours,
+        "threshold_run_pace_per_km": threshold_run,
+        "threshold_swim_pace_per_100m": threshold_swim,
+    }
+
+
 def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     # API requires 'oldest'; fetch last 90 days and slice to requested limit
     now = datetime.now(timezone.utc)

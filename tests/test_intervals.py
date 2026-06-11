@@ -14,6 +14,190 @@ def _mock_response(json_data: object, status_code: int = 200) -> MagicMock:
     return mock
 
 
+def _mock_client(get_response=None, post_response=None):
+    mock = MagicMock()
+    mock.__enter__ = MagicMock(return_value=mock)
+    mock.__exit__ = MagicMock(return_value=False)
+    if get_response is not None:
+        mock.get.return_value = get_response
+    if post_response is not None:
+        mock.post.return_value = post_response
+    return mock
+
+
+# --- get_athlete_settings ---
+
+
+def test_get_athlete_settings_returns_athlete_data() -> None:
+    from t3.integrations import intervals
+
+    fake = {"id": "i12345", "ftp": 240, "weight": 75.0, "height": 178}
+    with patch("t3.integrations.intervals.httpx.Client", return_value=_mock_client(get_response=_mock_response(fake))):
+        result = intervals.get_athlete_settings()
+
+    assert result == fake
+
+
+def test_get_athlete_settings_uses_athlete_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    from t3.integrations import intervals
+
+    monkeypatch.setattr("t3.integrations.intervals.settings.intervals_athlete_id", "i99999")
+    mock = _mock_client(get_response=_mock_response({}))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        intervals.get_athlete_settings()
+
+    url = mock.get.call_args.args[0]
+    assert url.endswith("/i99999")
+
+
+def test_get_athlete_settings_uses_correct_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    from t3.integrations import intervals
+
+    monkeypatch.setattr("t3.integrations.intervals.settings.intervals_api_key", "key-xyz")
+    mock = _mock_client(get_response=_mock_response({}))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        intervals.get_athlete_settings()
+
+    assert mock.get.call_args.kwargs["auth"] == ("API_KEY", "key-xyz")
+
+
+# --- get_events ---
+
+
+def test_get_events_returns_list() -> None:
+    from t3.integrations import intervals
+
+    fake = [{"id": "e1", "category": "RACE", "name": "Sprint Tri"}]
+    mock = _mock_client(get_response=_mock_response(fake))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_events("2026-01-01T00:00:00", "2026-12-31T23:59:59")
+
+    assert result == fake
+
+
+def test_get_events_passes_oldest_and_newest_params() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response([]))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        intervals.get_events("2026-01-01T00:00:00", "2026-12-31T00:00:00")
+
+    params = mock.get.call_args.kwargs["params"]
+    assert params["oldest"] == "2026-01-01T00:00:00"
+    assert params["newest"] == "2026-12-31T00:00:00"
+
+
+def test_get_events_returns_empty_list_on_non_list_response() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response({"error": "bad"}))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_events("2026-01-01T00:00:00", "2026-12-31T00:00:00")
+
+    assert result == []
+
+
+# --- get_best_efforts ---
+
+_FAKE_ACTIVITIES = [
+    # Run 10km in 50min (pace = 5.0 min/km) — 3000s >= 1080s threshold
+    {"type": "Run", "distance": 10000, "moving_time": 3000},
+    # Run 5km in 22min (pace = 4.4 min/km) — 1320s >= 1080s — faster
+    {"type": "Run", "distance": 5000, "moving_time": 1320},
+    # Swim 1500m in 30min (pace = 2.0 min/100m) — 1800s
+    {"type": "Swim", "distance": 1500, "moving_time": 1800},
+    # Swim 400m in 7min (pace = 1.75 min/100m) — faster
+    {"type": "Swim", "distance": 400, "moving_time": 420},
+    # Bike 40km in 75min — contributes to avg hours only
+    {"type": "Ride", "distance": 40000, "moving_time": 4500},
+]
+
+
+def test_get_best_efforts_returns_expected_keys() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response(_FAKE_ACTIVITIES))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_best_efforts(days=28)
+
+    assert "avg_weekly_hours" in result
+    assert "threshold_run_pace_per_km" in result
+    assert "threshold_swim_pace_per_100m" in result
+
+
+def test_get_best_efforts_selects_fastest_run_pace() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response(_FAKE_ACTIVITIES))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_best_efforts(days=28)
+
+    # 5km in 22min = 4.4 min/km is faster than 10km in 50min = 5.0 min/km
+    assert result["threshold_run_pace_per_km"] == pytest.approx(4.4, abs=0.01)
+
+
+def test_get_best_efforts_selects_fastest_swim_pace() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response(_FAKE_ACTIVITIES))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_best_efforts(days=28)
+
+    # 400m in 7min = 1.75 min/100m is faster than 1500m in 30min = 2.0 min/100m
+    assert result["threshold_swim_pace_per_100m"] == pytest.approx(1.75, abs=0.01)
+
+
+def test_get_best_efforts_computes_avg_weekly_hours() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response(_FAKE_ACTIVITIES))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_best_efforts(days=28)
+
+    # Total moving_time = 3000 + 1320 + 1800 + 420 + 4500 = 11040s = 3.067h over 4 weeks = 0.77 h/week
+    expected = round(11040 / 3600 / (28 / 7), 2)
+    assert result["avg_weekly_hours"] == pytest.approx(expected, abs=0.01)
+
+
+def test_get_best_efforts_returns_none_paces_when_no_qualifying_activities() -> None:
+    from t3.integrations import intervals
+
+    activities = [{"type": "Ride", "distance": 30000, "moving_time": 3600}]
+    mock = _mock_client(get_response=_mock_response(activities))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_best_efforts(days=28)
+
+    assert result["threshold_run_pace_per_km"] is None
+    assert result["threshold_swim_pace_per_100m"] is None
+
+
+def test_get_best_efforts_excludes_short_runs() -> None:
+    from t3.integrations import intervals
+
+    # Run only 5 min — below 18-min threshold, should not count
+    activities = [{"type": "Run", "distance": 1000, "moving_time": 300}]
+    mock = _mock_client(get_response=_mock_response(activities))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        result = intervals.get_best_efforts(days=28)
+
+    assert result["threshold_run_pace_per_km"] is None
+
+
+def test_get_best_efforts_passes_oldest_newest_params() -> None:
+    from t3.integrations import intervals
+
+    mock = _mock_client(get_response=_mock_response([]))
+    with patch("t3.integrations.intervals.httpx.Client", return_value=mock):
+        intervals.get_best_efforts(days=14)
+
+    params = mock.get.call_args.kwargs["params"]
+    assert "oldest" in params
+    assert "newest" in params
+
+
+# --- existing tests ---
+
+
 def test_get_activities_returns_list(monkeypatch: pytest.MonkeyPatch) -> None:
     from t3.integrations import intervals
 
