@@ -4,13 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.oauth2.credentials import Credentials
 
+from t3.credential_store import CredentialStore
 from t3.db import init_db
-from t3.gcal import (
-    _client_config,
-    _free_port,
-    _load_credentials,
-    _store_tokens,
-)
+from t3.gcal import _client_config, _free_port
 
 
 # --- helpers ---
@@ -38,7 +34,6 @@ def test_free_port_returns_open_port() -> None:
 
     port = _free_port()
     assert 1024 < port < 65536
-    # Verify it's actually free
     with socket.socket() as s:
         s.bind(("localhost", port))
 
@@ -56,11 +51,12 @@ def test_client_config_has_correct_keys(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_store_and_load_tokens_roundtrip(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "test.db")
-    init_db(db)  # create schema
+    init_db(db)
     creds = _fake_creds(expiry=datetime(2026, 12, 31, tzinfo=timezone.utc))
+    store = CredentialStore(db)
 
-    _store_tokens(creds, db)
-    loaded = _load_credentials(db)
+    store.store(creds)
+    loaded = store.load()
 
     assert loaded is not None
     assert loaded.token == "access-token"
@@ -70,17 +66,18 @@ def test_store_and_load_tokens_roundtrip(tmp_path: pytest.TempPathFactory) -> No
 def test_load_credentials_returns_none_when_not_connected(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "empty.db")
     init_db(db)
-    assert _load_credentials(db) is None
+    assert CredentialStore(db).load() is None
 
 
 def test_store_tokens_upserts_on_reconnect(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
+    store = CredentialStore(db)
 
-    _store_tokens(_fake_creds(token="old-token"), db)
-    _store_tokens(_fake_creds(token="new-token"), db)
+    store.store(_fake_creds(token="old-token"))
+    store.store(_fake_creds(token="new-token"))
 
-    loaded = _load_credentials(db)
+    loaded = store.load()
     assert loaded is not None
     assert loaded.token == "new-token"
 
@@ -88,12 +85,12 @@ def test_store_tokens_upserts_on_reconnect(tmp_path: pytest.TempPathFactory) -> 
 def test_store_tokens_handles_missing_expiry(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
-    _store_tokens(_fake_creds(expiry=None), db)
-    loaded = _load_credentials(db)
-    assert loaded is not None
+    store = CredentialStore(db)
+    store.store(_fake_creds(expiry=None))
+    assert store.load() is not None
 
 
-# --- bot handler unit test ---
+# --- bot handler unit tests ---
 
 @pytest.mark.anyio
 async def test_connect_gcal_handler_success() -> None:
@@ -107,7 +104,6 @@ async def test_connect_gcal_handler_success() -> None:
         await connect_gcal(update, context)
 
     mock_flow.assert_called_once()
-    # Last reply should confirm success
     last_reply = update.message.reply_text.call_args_list[-1].args[0]
     assert "connected" in last_reply.lower()
 
