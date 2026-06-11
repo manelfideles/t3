@@ -5,8 +5,8 @@ from google import genai
 from google.genai import types
 
 from t3.config import settings
-import t3.tools.gcal  # noqa: F401 — registers gcal tools on import
-import t3.tools.intervals  # noqa: F401 — registers intervals tools on import
+import t3.tools.gcal  # noqa: F401 — triggers @tool registration
+import t3.tools.intervals  # noqa: F401 — triggers @tool registration
 from t3.tools.registry import REGISTRY
 
 logger = logging.getLogger(__name__)

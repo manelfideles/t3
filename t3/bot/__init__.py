@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    from t3 import gcal
+    from t3.integrations import gcal
 
     await update.message.reply_text(
         "Starting Google Calendar authorization.\n"

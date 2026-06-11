@@ -1,9 +1,7 @@
 from typing import Any
 
-from t3.intervals import (
+from t3.integrations.intervals import (
     create_planned_workout as _create_planned_workout,
-)
-from t3.intervals import (
     get_activities as _get_activities,
 )
 from t3.tools.registry import tool

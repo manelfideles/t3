@@ -1,6 +1,6 @@
 
 from t3.db import init_db
-from t3.onboarding import (
+from t3.bot.onboarding import (
     QUESTIONS,
     TRANSITIONS,
     OnboardingSession,

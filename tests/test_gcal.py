@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.oauth2.credentials import Credentials
 
-from t3.credential_store import CredentialStore
+from t3.integrations.credential_store import CredentialStore
 from t3.db import init_db
-from t3.gcal import _client_config, _free_port
+from t3.integrations.gcal import _client_config, _free_port
 
 # --- helpers ---
 
@@ -38,8 +38,8 @@ def test_free_port_returns_open_port() -> None:
 
 
 def test_client_config_has_correct_keys(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("t3.gcal.settings.google_client_id", "test-client-id")
-    monkeypatch.setattr("t3.gcal.settings.google_client_secret", "test-secret")
+    monkeypatch.setattr("t3.integrations.gcal.settings.google_client_id", "test-client-id")
+    monkeypatch.setattr("t3.integrations.gcal.settings.google_client_secret", "test-secret")
     cfg = _client_config()
     assert "installed" in cfg
     assert cfg["installed"]["client_id"] == "test-client-id"
@@ -99,7 +99,7 @@ async def test_connect_gcal_handler_success() -> None:
     update.message.reply_text = AsyncMock()
     context = MagicMock()
 
-    with patch("t3.gcal.run_oauth_flow", new=AsyncMock()) as mock_flow:
+    with patch("t3.integrations.gcal.run_oauth_flow", new=AsyncMock()) as mock_flow:
         await connect_gcal(update, context)
 
     mock_flow.assert_called_once()
@@ -117,7 +117,7 @@ async def test_connect_gcal_handler_timeout() -> None:
     update.message.reply_text = AsyncMock()
     context = MagicMock()
 
-    with patch("t3.gcal.run_oauth_flow", side_effect=asyncio.TimeoutError):
+    with patch("t3.integrations.gcal.run_oauth_flow", side_effect=asyncio.TimeoutError):
         await connect_gcal(update, context)
 
     last_reply = update.message.reply_text.call_args_list[-1].args[0]
@@ -129,7 +129,7 @@ async def test_connect_gcal_handler_timeout() -> None:
 @pytest.mark.integration
 def test_list_events_live() -> None:
     from t3.config import settings
-    from t3.gcal import list_events
+    from t3.integrations.gcal import list_events
 
     if not settings.google_client_id:
         pytest.skip("GOOGLE_CLIENT_ID not set")
@@ -144,7 +144,7 @@ def test_list_events_live() -> None:
 @pytest.mark.integration
 def test_create_event_live() -> None:
     from t3.config import settings
-    from t3.gcal import create_event
+    from t3.integrations.gcal import create_event
 
     if not settings.google_client_id:
         pytest.skip("GOOGLE_CLIENT_ID not set")

@@ -1,6 +1,6 @@
 from typing import Any
 
-from t3.gcal import create_event, list_events
+from t3.integrations.gcal import create_event, list_events
 from t3.tools.registry import tool
 
 

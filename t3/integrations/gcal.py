@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
 from t3.config import settings
-from t3.credential_store import GCAL_SCOPES, CredentialStore
+from t3.integrations.credential_store import GCAL_SCOPES, CredentialStore
 
 
 def _free_port() -> int:
