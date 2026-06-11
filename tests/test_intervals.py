@@ -28,8 +28,9 @@ def test_get_activities_returns_list(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result == fake_activities
     mock_client.get.assert_called_once()
+    # limit is applied client-side; no params sent to the API
     call_kwargs = mock_client.get.call_args
-    assert call_kwargs.kwargs["params"] == {"limit": 5}
+    assert "params" not in (call_kwargs.kwargs or {})
 
 
 def test_get_activities_uses_correct_auth(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -18,14 +18,12 @@ def _url(path: str) -> str:
 
 
 def get_activities(limit: int = 10) -> list[dict[str, Any]]:
+    # Intervals.icu doesn't accept a limit param — fetch and slice client-side
     with httpx.Client() as client:
-        response = client.get(
-            _url("activities"),
-            auth=_auth(),
-            params={"limit": limit},
-        )
+        response = client.get(_url("activities"), auth=_auth())
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        return data[:limit] if isinstance(data, list) else []
 
 
 def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
