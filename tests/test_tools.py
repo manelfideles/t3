@@ -41,7 +41,9 @@ def test_get_activities_passes_limit() -> None:
 def test_create_planned_workout_returns_dict() -> None:
     fake = {"id": "evt1"}
     with patch("t3.tools.intervals._create_planned_workout", return_value=fake):
-        result = create_planned_workout(date="2026-06-11", workout_type="Swim", title="2km easy", description="2km easy")
+        result = create_planned_workout(
+            date="2026-06-11", workout_type="Swim", title="2km easy", description="2km easy"
+        )
     assert result == fake
 
 

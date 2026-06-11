@@ -20,14 +20,11 @@ async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     from t3.integrations import gcal
 
     await update.message.reply_text(
-        "Starting Google Calendar authorization.\n"
-        "A link is coming — click it, approve access, then come back here."
+        "Starting Google Calendar authorization.\nA link is coming — click it, approve access, then come back here."
     )
 
     async def send_url(url: str) -> None:
-        await update.message.reply_text(
-            f"Authorize here (link expires in 5 min):\n{url}"
-        )
+        await update.message.reply_text(f"Authorize here (link expires in 5 min):\n{url}")
 
     try:
         await gcal.run_oauth_flow(send_url)
@@ -52,9 +49,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 "Gemini API rate limit hit. Wait a minute and try again, or check your quota at aistudio.google.com."
             )
         elif "503" in msg or "UNAVAILABLE" in msg:
-            await update.message.reply_text(
-                "Gemini is overloaded right now. Try again in a few seconds."
-            )
+            await update.message.reply_text("Gemini is overloaded right now. Try again in a few seconds.")
         else:
             await update.message.reply_text(f"Something went wrong: {exc}")
 

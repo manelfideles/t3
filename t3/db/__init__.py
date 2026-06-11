@@ -57,13 +57,15 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 );
 """
 
-EXPECTED_TABLES = frozenset({
-    "athlete_profile",
-    "training_plan",
-    "calendar_events",
-    "notification_prefs",
-    "oauth_tokens",
-})
+EXPECTED_TABLES = frozenset(
+    {
+        "athlete_profile",
+        "training_plan",
+        "calendar_events",
+        "notification_prefs",
+        "oauth_tokens",
+    }
+)
 
 
 def init_db(db_path: str = ":memory:") -> sqlite3.Connection:
@@ -74,9 +76,7 @@ def init_db(db_path: str = ":memory:") -> sqlite3.Connection:
 
 
 def get_tables(conn: sqlite3.Connection) -> frozenset[str]:
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-    ).fetchall()
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
     return frozenset(row[0] for row in rows)
 
 
@@ -151,9 +151,16 @@ class AthleteRepo:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                name, age, sex, experience_level,
-                weekly_hours_json, swim_baseline, bike_baseline, run_baseline,
-                upcoming_races_json, injury_history,
+                name,
+                age,
+                sex,
+                experience_level,
+                weekly_hours_json,
+                swim_baseline,
+                bike_baseline,
+                run_baseline,
+                upcoming_races_json,
+                injury_history,
             ),
         )
         self._conn.commit()

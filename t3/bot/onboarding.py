@@ -29,25 +29,13 @@ QUESTIONS: dict[OnboardingState, str] = {
     OnboardingState.ASK_NAME: "What's your name?",
     OnboardingState.ASK_AGE: "How old are you?",
     OnboardingState.ASK_SEX: "What's your biological sex? (male/female/other)",
-    OnboardingState.ASK_EXPERIENCE: (
-        "What's your triathlon experience level? (beginner/intermediate/advanced)"
-    ),
+    OnboardingState.ASK_EXPERIENCE: ("What's your triathlon experience level? (beginner/intermediate/advanced)"),
     OnboardingState.ASK_WEEKLY_HOURS: "How many hours per week can you train? (e.g. 8)",
-    OnboardingState.ASK_SWIM_BASELINE: (
-        "Describe your current swim fitness (e.g. '1500m in 30min')"
-    ),
-    OnboardingState.ASK_BIKE_BASELINE: (
-        "Describe your current bike fitness (e.g. '40km in 75min')"
-    ),
-    OnboardingState.ASK_RUN_BASELINE: (
-        "Describe your current run fitness (e.g. '10km in 55min')"
-    ),
-    OnboardingState.ASK_UPCOMING_RACES: (
-        "Any upcoming races? (e.g. 'Sprint triathlon July 2026') — or 'none'"
-    ),
-    OnboardingState.ASK_INJURY_HISTORY: (
-        "Any injury history I should know about? — or 'none'"
-    ),
+    OnboardingState.ASK_SWIM_BASELINE: ("Describe your current swim fitness (e.g. '1500m in 30min')"),
+    OnboardingState.ASK_BIKE_BASELINE: ("Describe your current bike fitness (e.g. '40km in 75min')"),
+    OnboardingState.ASK_RUN_BASELINE: ("Describe your current run fitness (e.g. '10km in 55min')"),
+    OnboardingState.ASK_UPCOMING_RACES: ("Any upcoming races? (e.g. 'Sprint triathlon July 2026') — or 'none'"),
+    OnboardingState.ASK_INJURY_HISTORY: ("Any injury history I should know about? — or 'none'"),
     OnboardingState.ASK_NOTIFICATIONS: (
         "Notification preference: 'digest' (weekly summary) or 'full' (post-session + weekly)"
     ),

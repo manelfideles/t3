@@ -10,6 +10,7 @@ from t3.integrations.gcal import _client_config, _free_port
 
 # --- helpers ---
 
+
 def _fake_creds(
     token: str = "access-token",
     refresh: str = "refresh-token",
@@ -27,6 +28,7 @@ def _fake_creds(
 
 
 # --- unit tests ---
+
 
 def test_free_port_returns_open_port() -> None:
     import socket
@@ -91,6 +93,7 @@ def test_store_tokens_handles_missing_expiry(tmp_path: pytest.TempPathFactory) -
 
 # --- bot handler unit tests ---
 
+
 @pytest.mark.anyio
 async def test_connect_gcal_handler_success() -> None:
     from t3.bot import connect_gcal
@@ -125,6 +128,7 @@ async def test_connect_gcal_handler_timeout() -> None:
 
 
 # --- integration tests ---
+
 
 @pytest.mark.integration
 def test_list_events_live() -> None:

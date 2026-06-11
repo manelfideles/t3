@@ -1,4 +1,3 @@
-
 from t3.db import init_db
 from t3.bot.onboarding import (
     QUESTIONS,
@@ -10,17 +9,17 @@ from t3.bot.onboarding import (
 
 # Answers in the order the state machine asks for them (START → COMPLETE)
 FULL_ANSWERS = [
-    "Manuel",           # name
-    "32",               # age
-    "male",             # sex
-    "intermediate",     # experience
-    "10",               # weekly_hours
-    "1500m in 28min",   # swim_baseline
-    "40km in 65min",    # bike_baseline
-    "10km in 50min",    # run_baseline
-    "Sprint July 2026", # upcoming_races
-    "none",             # injury_history
-    "digest",           # notifications
+    "Manuel",  # name
+    "32",  # age
+    "male",  # sex
+    "intermediate",  # experience
+    "10",  # weekly_hours
+    "1500m in 28min",  # swim_baseline
+    "40km in 65min",  # bike_baseline
+    "10km in 50min",  # run_baseline
+    "Sprint July 2026",  # upcoming_races
+    "none",  # injury_history
+    "digest",  # notifications
 ]
 
 
@@ -33,6 +32,7 @@ def _run_full_flow(answers: list[str] = FULL_ANSWERS) -> OnboardingSession:
 
 
 # --- state machine ---
+
 
 def test_initial_state_is_start() -> None:
     session = OnboardingSession()
@@ -98,6 +98,7 @@ def test_advance_strips_whitespace() -> None:
 
 
 # --- db flush ---
+
 
 def test_flush_creates_athlete_profile_row() -> None:
     conn = init_db()
