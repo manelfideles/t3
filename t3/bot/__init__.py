@@ -46,7 +46,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(reply or "I didn't get a response. Try again.")
     except Exception as exc:
         logger.exception("Agent error")
-        await update.message.reply_text(f"Something went wrong: {exc}")
+        msg = str(exc)
+        if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
+            await update.message.reply_text(
+                "Gemini API rate limit hit. Wait a minute and try again, or check your quota at aistudio.google.com."
+            )
+        else:
+            await update.message.reply_text(f"Something went wrong: {exc}")
 
 
 def create_app() -> Application:
