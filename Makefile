@@ -6,9 +6,6 @@ install:
 test:
 	uv run pytest
 
-lint:
-	uv run ruff format --check . 
-
 lint_fix:
 	uv run ruff check . --fix && uv run ruff format . 
 
@@ -18,7 +15,7 @@ typecheck:
 check: lint typecheck test
 
 run:
-	uv run python -m t3
+	uv run pytest
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
