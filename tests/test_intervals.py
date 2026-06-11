@@ -90,7 +90,7 @@ def test_create_planned_workout_posts_correct_payload(monkeypatch: pytest.Monkey
     payload = mock_client.post.call_args.kwargs["json"]
     assert payload["start_date_local"] == "2026-06-15T08:00:00"
     assert payload["type"] == "Swim"
-    assert payload["name"] == "2km steady"
+    assert payload["name"] == "T3 - 2km steady"
     assert payload["description"] == "2x750m @ Z2"
     assert payload["category"] == "WORKOUT"
 

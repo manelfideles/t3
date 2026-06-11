@@ -34,7 +34,12 @@ def get_activities(limit: int = 10) -> list[dict[str, Any]]:
         return data[:limit] if isinstance(data, list) else []
 
 
-def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
+def create_planned_workout(
+    date: str,
+    workout_type: str,
+    title: str,
+    description: str,
+) -> dict[str, Any]:
     # API requires a full datetime string; append midnight if only a date was given
     start_dt = date if "T" in date else f"{date}T08:00:00"
     with httpx.Client() as client:
@@ -44,8 +49,9 @@ def create_planned_workout(date: str, type: str, description: str) -> dict[str, 
             json={
                 "start_date_local": start_dt,
                 "category": "WORKOUT",
-                "type": type,
-                "name": description,
+                "type": workout_type,
+                "name": f"T3 - {title}" if not title.startswith("T3 - ") else title,
+                "description": description,
             },
         )
         response.raise_for_status()

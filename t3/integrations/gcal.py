@@ -11,7 +11,7 @@ from googleapiclient.discovery import build
 from t3.config import settings
 from t3.integrations.credential_store import GCAL_SCOPES, CredentialStore
 
-_T3_CALENDAR_NAME = "T3"
+T3_CALENDAR_NAME = "T3"
 
 
 def _free_port() -> int:
@@ -61,13 +61,13 @@ async def _wait_for_callback(port: int, timeout: float = 300.0) -> str:
         await server.wait_closed()
 
 
-def _get_or_create_t3_calendar(service) -> str:
+def _get_calendar(service, calendar_id: str) -> str:
     """Return the calendarId for the 'T3' calendar, creating it if it doesn't exist."""
     calendars = service.calendarList().list().execute()
     for cal in calendars.get("items", []):
-        if cal.get("summary") == _T3_CALENDAR_NAME:
+        if cal.get("summary") == calendar_id:
             return cal["id"]
-    created = service.calendars().insert(body={"summary": _T3_CALENDAR_NAME}).execute()
+    created = service.calendars().insert(body={"summary": calendar_id}).execute()
     return created["id"]
 
 
@@ -96,7 +96,7 @@ async def run_oauth_flow(
 def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[dict]:
     creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
-    calendar_id = _get_or_create_t3_calendar(service)
+    calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
     result = (
         service.events()
         .list(
@@ -114,9 +114,9 @@ def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[di
 def create_event(summary: str, start: str, end: str, db_path: str = "t3.db") -> dict:
     creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
-    calendar_id = _get_or_create_t3_calendar(service)
+    calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
     event = {
-        "summary": summary,
+        "summary": f"T3 - {summary}" if not summary.startswith("T3 - ") else summary,
         "start": {"dateTime": start, "timeZone": "UTC"},
         "end": {"dateTime": end, "timeZone": "UTC"},
     }
