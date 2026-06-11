@@ -13,9 +13,10 @@ CREATE TABLE IF NOT EXISTS athlete_profile (
     height_cm REAL,
     experience_level TEXT,
     weekly_hours_json TEXT,
-    swim_baseline TEXT,
-    bike_baseline TEXT,
-    run_baseline TEXT,
+    ftp_watts INTEGER,
+    threshold_run_pace_per_km REAL,
+    threshold_swim_pace_per_100m REAL,
+    avg_weekly_hours REAL,
     upcoming_races_json TEXT,
     injury_history TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -136,9 +137,10 @@ class AthleteRepo:
         sex: str | None,
         experience_level: str | None,
         weekly_hours_json: str | None,
-        swim_baseline: str | None,
-        bike_baseline: str | None,
-        run_baseline: str | None,
+        ftp_watts: int | None,
+        threshold_run_pace_per_km: float | None,
+        threshold_swim_pace_per_100m: float | None,
+        avg_weekly_hours: float | None,
         upcoming_races_json: str | None,
         injury_history: str | None,
     ) -> int:
@@ -146,9 +148,10 @@ class AthleteRepo:
             """
             INSERT INTO athlete_profile (
                 name, age, sex, experience_level,
-                weekly_hours_json, swim_baseline, bike_baseline, run_baseline,
+                weekly_hours_json, ftp_watts, threshold_run_pace_per_km,
+                threshold_swim_pace_per_100m, avg_weekly_hours,
                 upcoming_races_json, injury_history
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -156,9 +159,10 @@ class AthleteRepo:
                 sex,
                 experience_level,
                 weekly_hours_json,
-                swim_baseline,
-                bike_baseline,
-                run_baseline,
+                ftp_watts,
+                threshold_run_pace_per_km,
+                threshold_swim_pace_per_100m,
+                avg_weekly_hours,
                 upcoming_races_json,
                 injury_history,
             ),
@@ -171,7 +175,8 @@ class AthleteRepo:
         row = self._conn.execute(
             """
             SELECT name, age, sex, experience_level,
-                   weekly_hours_json, swim_baseline, bike_baseline, run_baseline,
+                   weekly_hours_json, ftp_watts, threshold_run_pace_per_km,
+                   threshold_swim_pace_per_100m, avg_weekly_hours,
                    upcoming_races_json, injury_history
             FROM athlete_profile ORDER BY id DESC LIMIT 1
             """
@@ -188,9 +193,10 @@ class AthleteProfileRow:
     sex: str | None
     experience_level: str | None
     weekly_hours_json: str | None
-    swim_baseline: str | None
-    bike_baseline: str | None
-    run_baseline: str | None
+    ftp_watts: int | None
+    threshold_run_pace_per_km: float | None
+    threshold_swim_pace_per_100m: float | None
+    avg_weekly_hours: float | None
     upcoming_races_json: str | None
     injury_history: str | None
 

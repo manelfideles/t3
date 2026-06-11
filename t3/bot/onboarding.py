@@ -83,9 +83,10 @@ def flush_to_db(session: OnboardingSession, conn: sqlite3.Connection) -> int:
         sex=a.get("sex"),
         experience_level=a.get("experience"),
         weekly_hours_json=json.dumps({"weekly": a.get("weekly_hours")}),
-        swim_baseline=a.get("swim_baseline"),
-        bike_baseline=a.get("bike_baseline"),
-        run_baseline=a.get("run_baseline"),
+        ftp_watts=None,
+        threshold_run_pace_per_km=None,
+        threshold_swim_pace_per_100m=None,
+        avg_weekly_hours=None,
         upcoming_races_json=json.dumps([a["upcoming_races"]]) if a.get("upcoming_races") else None,
         injury_history=a.get("injury_history"),
     )
