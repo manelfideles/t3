@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     telegram_token: str = ""
     gemini_api_key: str = ""
     database_url: str = "t3.db"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    intervals_athlete_id: str = ""
+    intervals_api_key: str = ""
 
 
 settings = Settings()

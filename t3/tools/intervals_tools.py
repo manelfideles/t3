@@ -1,5 +1,10 @@
 from typing import Any
 
+from t3.intervals import (
+    create_planned_workout as _create_planned_workout,
+    get_activities as _get_activities,
+)
+
 
 def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     """Retrieve recent Intervals.icu activities.
@@ -7,7 +12,7 @@ def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     Args:
         limit: Maximum number of activities to return (default 10)
     """
-    return []  # stub — full implementation in S6
+    return _get_activities(limit)
 
 
 def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
@@ -18,7 +23,7 @@ def create_planned_workout(date: str, type: str, description: str) -> dict[str, 
         type: Workout type (Swim, Bike, Run)
         description: Workout description
     """
-    return {}  # stub — full implementation in S6
+    return _create_planned_workout(date, type, description)
 
 
 INTERVALS_FUNCTIONS = [get_activities, create_planned_workout]
