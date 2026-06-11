@@ -1,135 +1,314 @@
-from t3.db import init_db
-from t3.bot.onboarding import (
-    QUESTIONS,
-    TRANSITIONS,
-    OnboardingSession,
-    OnboardingState,
-    flush_to_db,
-)
+from __future__ import annotations
 
-# Answers in the order the state machine asks for them (START → COMPLETE)
-FULL_ANSWERS = [
-    "Manuel",  # name
-    "32",  # age
-    "male",  # sex
-    "intermediate",  # experience
-    "10",  # weekly_hours
-    "1500m in 28min",  # swim_baseline
-    "40km in 65min",  # bike_baseline
-    "10km in 50min",  # run_baseline
-    "Sprint July 2026",  # upcoming_races
-    "none",  # injury_history
-    "digest",  # notifications
+import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from t3.bot.onboarding import (
+    IntervalsDerivedProfile,
+    _derive_experience_level,
+    apply_corrections,
+    fetch_profile_from_intervals,
+    flush_to_db,
+    format_confirmation_message,
+)
+from t3.db import AthleteRepo, init_db
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+_ATHLETE = {
+    "name": "Manuel",
+    "age": 32,
+    "sex": "male",
+    "ftp": 240,
+    "weight": 74.5,
+    "height": 178,
+}
+
+_EVENTS = [
+    # upcoming race
+    {"category": "RACE", "name": "City Olympic", "start_date_local": "2026-09-20T08:00:00"},
+    # past race — olympic
+    {"category": "RACE", "name": "Sprint Tri 2025", "start_date_local": "2025-06-01T08:00:00"},
+    # injury
+    {"category": "INJURED", "name": "Knee tendinitis", "start_date_local": "2025-03-01T00:00:00"},
 ]
 
-
-def _run_full_flow(answers: list[str] = FULL_ANSWERS) -> OnboardingSession:
-    session = OnboardingSession()
-    session.state = OnboardingState.ASK_NAME
-    for answer in answers:
-        session.advance(answer)
-    return session
+_EFFORTS = {
+    "avg_weekly_hours": 8.5,
+    "threshold_run_pace_per_km": 4.8,
+    "threshold_swim_pace_per_100m": 1.9,
+}
 
 
-# --- state machine ---
+def _fixture_profile() -> IntervalsDerivedProfile:
+    return IntervalsDerivedProfile(
+        name="Manuel",
+        age=32,
+        sex="male",
+        ftp_watts=240,
+        weight_kg=74.5,
+        height_cm=178.0,
+        avg_weekly_hours=8.5,
+        threshold_run_pace_per_km=4.8,
+        threshold_swim_pace_per_100m=1.9,
+        upcoming_races=[{"category": "RACE", "name": "City Olympic", "start_date_local": "2026-09-20T08:00:00"}],
+        injury_history=[{"category": "INJURED", "name": "Knee tendinitis"}],
+        experience_level="beginner",
+    )
 
 
-def test_initial_state_is_start() -> None:
-    session = OnboardingSession()
-    assert session.state == OnboardingState.START
-    assert not session.is_complete()
+# ---------------------------------------------------------------------------
+# _derive_experience_level
+# ---------------------------------------------------------------------------
 
 
-def test_start_has_no_question() -> None:
-    session = OnboardingSession()
-    assert session.current_question() is None
+def test_derive_experience_no_races_returns_beginner() -> None:
+    assert _derive_experience_level([]) == "beginner"
 
 
-def test_ask_name_has_question() -> None:
-    session = OnboardingSession()
-    session.state = OnboardingState.ASK_NAME
-    question = session.current_question()
-    assert question is not None
-    assert "name" in question.lower()
+def test_derive_experience_sprint_only_returns_beginner() -> None:
+    assert _derive_experience_level([{"name": "Sprint Tri 2025"}]) == "beginner"
 
 
-def test_advance_stores_answer_and_transitions() -> None:
-    session = OnboardingSession()
-    session.state = OnboardingState.ASK_NAME
-    next_state = session.advance("Manuel")
-    assert next_state == OnboardingState.ASK_AGE
-    assert session.answers["name"] == "Manuel"
+def test_derive_experience_olympic_returns_intermediate() -> None:
+    assert _derive_experience_level([{"name": "City Olympic Tri"}]) == "intermediate"
 
 
-def test_all_transitions_form_a_linear_chain_with_no_cycles() -> None:
-    state = OnboardingState.START
-    visited: set[OnboardingState] = set()
-    while state != OnboardingState.COMPLETE:
-        assert state not in visited, f"Cycle at {state}"
-        visited.add(state)
-        state = TRANSITIONS.get(state, OnboardingState.COMPLETE)
+def test_derive_experience_three_or_more_races_returns_intermediate() -> None:
+    races = [{"name": "Sprint"}, {"name": "Sprint"}, {"name": "Sprint"}]
+    assert _derive_experience_level(races) == "intermediate"
 
 
-def test_every_non_terminal_state_has_a_question() -> None:
-    skip = {OnboardingState.START, OnboardingState.COMPLETE}
-    for state in OnboardingState:
-        if state in skip:
-            continue
-        assert state in QUESTIONS, f"Missing question for {state}"
+def test_derive_experience_half_ironman_returns_intermediate() -> None:
+    assert _derive_experience_level([{"name": "Ironman 70.3 Cascais"}]) == "intermediate"
 
 
-def test_full_flow_reaches_complete() -> None:
-    session = _run_full_flow()
-    assert session.is_complete()
+def test_derive_experience_full_ironman_returns_advanced() -> None:
+    assert _derive_experience_level([{"name": "Ironman Wales"}]) == "advanced"
 
 
-def test_full_flow_stores_all_answers() -> None:
-    session = _run_full_flow()
-    assert session.answers["name"] == "Manuel"
-    assert session.answers["age"] == "32"
-    assert session.answers["experience"] == "intermediate"
-    assert session.answers["notifications"] == "digest"
+# ---------------------------------------------------------------------------
+# fetch_profile_from_intervals
+# ---------------------------------------------------------------------------
 
 
-def test_advance_strips_whitespace() -> None:
-    session = OnboardingSession()
-    session.state = OnboardingState.ASK_NAME
-    session.advance("  Manuel  ")
-    assert session.answers["name"] == "Manuel"
+def test_fetch_profile_returns_intervals_derived_profile() -> None:
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=_EVENTS),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+
+    assert isinstance(profile, IntervalsDerivedProfile)
 
 
-# --- db flush ---
+def test_fetch_profile_maps_athlete_fields() -> None:
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=_EVENTS),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+
+    assert profile.name == "Manuel"
+    assert profile.age == 32
+    assert profile.ftp_watts == 240
+    assert profile.weight_kg == 74.5
 
 
-def test_flush_creates_athlete_profile_row() -> None:
+def test_fetch_profile_maps_best_effort_fields() -> None:
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=_EVENTS),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+
+    assert profile.avg_weekly_hours == 8.5
+    assert profile.threshold_run_pace_per_km == pytest.approx(4.8)
+    assert profile.threshold_swim_pace_per_100m == pytest.approx(1.9)
+
+
+def test_fetch_profile_separates_upcoming_and_past_races() -> None:
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=_EVENTS),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+
+    assert len(profile.upcoming_races) == 1
+    assert profile.upcoming_races[0]["name"] == "City Olympic"
+
+
+def test_fetch_profile_captures_injury_history() -> None:
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=_EVENTS),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+
+    assert len(profile.injury_history) == 1
+    assert "Knee" in profile.injury_history[0]["name"]
+
+
+def test_fetch_profile_derives_experience_level() -> None:
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=_EVENTS),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+
+    # _EVENTS has one past sprint race → beginner
+    assert profile.experience_level == "beginner"
+
+
+# ---------------------------------------------------------------------------
+# format_confirmation_message
+# ---------------------------------------------------------------------------
+
+
+def test_format_confirmation_message_contains_all_key_fields() -> None:
+    profile = _fixture_profile()
+    msg = format_confirmation_message(profile)
+
+    assert "Manuel" in msg
+    assert "240" in msg  # FTP
+    assert "4.8" in msg  # run pace
+    assert "1.9" in msg  # swim pace
+    assert "8.5" in msg  # weekly hours
+    assert "yes" in msg.lower()
+
+
+def test_format_confirmation_message_shows_upcoming_race_count() -> None:
+    profile = _fixture_profile()
+    msg = format_confirmation_message(profile)
+    assert "1" in msg  # 1 upcoming race
+
+
+def test_format_confirmation_message_shows_injury_count_when_present() -> None:
+    profile = _fixture_profile()
+    msg = format_confirmation_message(profile)
+    assert "Injury" in msg or "injury" in msg
+
+
+def test_format_confirmation_message_omits_none_fields() -> None:
+    profile = IntervalsDerivedProfile(
+        name=None,
+        age=None,
+        sex=None,
+        ftp_watts=None,
+        weight_kg=None,
+        height_cm=None,
+        avg_weekly_hours=None,
+        threshold_run_pace_per_km=None,
+        threshold_swim_pace_per_100m=None,
+        upcoming_races=[],
+        injury_history=[],
+        experience_level=None,
+    )
+    msg = format_confirmation_message(profile)
+    # Should not blow up and should still have confirmation prompt
+    assert "yes" in msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# apply_corrections
+# ---------------------------------------------------------------------------
+
+
+def _mock_gemini_client(response_dict: dict) -> MagicMock:
+    response = MagicMock()
+    response.text = json.dumps(response_dict)
+    client = MagicMock(spec=["models"])
+    client.models.generate_content.return_value = response
+    return client
+
+
+def test_apply_corrections_updates_ftp() -> None:
+    profile = _fixture_profile()
+    updated_dict = {
+        **{f.name: getattr(profile, f.name) for f in profile.__dataclass_fields__.values()},  # type: ignore[attr-defined]
+        "ftp_watts": 260,
+    }
+    client = _mock_gemini_client(updated_dict)
+
+    result = apply_corrections(profile, "my FTP is actually 260", client)
+
+    assert result.ftp_watts == 260
+    client.models.generate_content.assert_called_once()
+
+
+def test_apply_corrections_preserves_unchanged_fields() -> None:
+    profile = _fixture_profile()
+    updated_dict = {
+        **{f.name: getattr(profile, f.name) for f in profile.__dataclass_fields__.values()},  # type: ignore[attr-defined]
+        "ftp_watts": 260,
+    }
+    client = _mock_gemini_client(updated_dict)
+
+    result = apply_corrections(profile, "my FTP is actually 260", client)
+
+    assert result.name == "Manuel"
+    assert result.avg_weekly_hours == pytest.approx(8.5)
+
+
+def test_apply_corrections_falls_back_to_original_on_missing_key() -> None:
+    profile = _fixture_profile()
+    # Gemini returns only partial dict — missing most keys
+    client = _mock_gemini_client({"ftp_watts": 270})
+
+    result = apply_corrections(profile, "FTP is 270", client)
+
+    assert result.ftp_watts == 270
+    assert result.name == "Manuel"  # falls back to original
+
+
+# ---------------------------------------------------------------------------
+# flush_to_db
+# ---------------------------------------------------------------------------
+
+
+def test_flush_to_db_writes_row_and_returns_id() -> None:
     conn = init_db()
-    session = _run_full_flow()
-    row_id = flush_to_db(session, conn)
+    profile = _fixture_profile()
+    row_id = flush_to_db(profile, conn)
     assert row_id == 1
 
 
-def test_flush_stores_name_and_age() -> None:
+def test_flush_to_db_persists_typed_fields() -> None:
     conn = init_db()
-    session = _run_full_flow()
-    flush_to_db(session, conn)
-    row = conn.execute("SELECT name, age FROM athlete_profile WHERE id = 1").fetchone()
-    assert row[0] == "Manuel"
-    assert row[1] == 32
+    profile = _fixture_profile()
+    flush_to_db(profile, conn)
+    saved = AthleteRepo(conn).load_latest()
+    assert saved is not None
+    assert saved.ftp_watts == 240
+    assert saved.threshold_run_pace_per_km == pytest.approx(4.8)
+    assert saved.avg_weekly_hours == pytest.approx(8.5)
+    assert saved.experience_level == "beginner"
 
 
-def test_flush_stores_non_numeric_age_as_null() -> None:
-    answers = FULL_ANSWERS.copy()
-    answers[1] = "thirty-two"  # non-numeric age
+def test_flush_to_db_serialises_upcoming_races_as_json() -> None:
     conn = init_db()
-    session = _run_full_flow(answers)
-    flush_to_db(session, conn)
-    row = conn.execute("SELECT age FROM athlete_profile WHERE id = 1").fetchone()
-    assert row[0] is None
+    profile = _fixture_profile()
+    flush_to_db(profile, conn)
+    row = conn.execute("SELECT upcoming_races_json FROM athlete_profile WHERE id=1").fetchone()
+    races = json.loads(row[0])
+    assert isinstance(races, list)
+    assert races[0]["name"] == "City Olympic"
 
 
-def test_flush_multiple_sessions_get_separate_rows() -> None:
+def test_flush_to_db_multiple_profiles_get_separate_rows() -> None:
     conn = init_db()
-    flush_to_db(_run_full_flow(), conn)
-    flush_to_db(_run_full_flow(), conn)
+    profile = _fixture_profile()
+    flush_to_db(profile, conn)
+    flush_to_db(profile, conn)
     count = conn.execute("SELECT COUNT(*) FROM athlete_profile").fetchone()[0]
     assert count == 2
