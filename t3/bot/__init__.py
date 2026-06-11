@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from google import genai
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -10,9 +11,7 @@ from telegram.ext import (
     filters,
 )
 
-from google import genai
-
-from t3.agent import build_client, run
+from t3.agent import run
 from t3.bot.onboarding import (
     apply_corrections,
     fetch_profile_from_intervals,
@@ -33,6 +32,7 @@ def _get_client() -> genai.Client:
     global _client
     if _client is None:
         from t3.agent import build_client as _build
+
         _client = _build()
     return _client
 
@@ -70,6 +70,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
+    if context.user_data is None:
+        return
     context.user_data["pending_profile"] = profile
     context.user_data["onboarding_state"] = "AWAITING_CONFIRMATION"
     await message.reply_text(format_confirmation_message(profile), parse_mode="Markdown")
@@ -81,7 +83,7 @@ async def _handle_onboarding_reply(
     user_text: str,
 ) -> None:
     message = update.message
-    if message is None:
+    if message is None or context.user_data is None:
         return
 
     pending_profile = context.user_data.get("pending_profile")
@@ -97,6 +99,7 @@ async def _handle_onboarding_reply(
         await message.reply_text("Profile saved! Generating your training plan now...")
         try:
             from t3.tools.plan import generate_training_plan
+
             generate_training_plan()
             await message.reply_text("Your training plan has been generated. Ask me anything to get started!")
         except Exception as exc:
@@ -140,7 +143,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     user_text = update.message.text or ""
 
-    if context.user_data.get("onboarding_state") == "AWAITING_CONFIRMATION":
+    if context.user_data is not None and context.user_data.get("onboarding_state") == "AWAITING_CONFIRMATION":
         await _handle_onboarding_reply(update, context, user_text)
         return
 
