@@ -260,7 +260,10 @@ async def test_handle_message_routes_to_onboarding_when_awaiting_confirmation() 
 async def test_handle_message_routes_to_agent_when_not_onboarding() -> None:
     update, context = _make_update("How many km should I swim this week?")
 
-    with patch("t3.bot.run", new_callable=AsyncMock, return_value="Swim 3km this week."):
+    with (
+        patch("t3.bot._get_client", return_value=MagicMock()),
+        patch("t3.bot.run", new_callable=AsyncMock, return_value="Swim 3km this week."),
+    ):
         from t3.bot import handle_message
 
         await handle_message(update, context)
