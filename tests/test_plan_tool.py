@@ -116,3 +116,101 @@ def test_generate_training_plan_registered_in_registry() -> None:
 
     names = [getattr(fn, "__name__", None) for fn in REGISTRY.functions]
     assert "generate_training_plan" in names
+
+
+def _fixture_plan_with_sessions() -> dict:
+    return {
+        "phases": [
+            {
+                "name": "Base",
+                "start": "2026-06-15",
+                "end": "2026-06-28",
+                "weeks": 2,
+                "weekly_hours": 7.5,
+                "sessions": [
+                    {
+                        "week": 1,
+                        "day": "monday",
+                        "discipline": "swim",
+                        "type": "easy",
+                        "duration_min": 45,
+                        "intensity": "low",
+                        "notes": "Warm up drills",
+                    },
+                    {
+                        "week": 1,
+                        "day": "wednesday",
+                        "discipline": "run",
+                        "type": "threshold",
+                        "duration_min": 60,
+                        "intensity": "high",
+                        "notes": "",
+                    },
+                ],
+            }
+        ]
+    }
+
+
+def test_confirm_plan_schedules_sessions(tmp_path) -> None:
+    db_path = str(tmp_path / "test.db")
+
+    from t3.db import AthleteRepo, CalendarEventRepo, TrainingPlanRepo, init_db as _init_db
+
+    conn = _init_db(db_path)
+    athlete_repo = AthleteRepo(conn)
+    profile = _fixture_profile()
+    athlete_repo.save_profile(
+        name=profile.name,
+        age=profile.age,
+        sex=profile.sex,
+        experience_level=profile.experience_level,
+        weekly_hours_json=profile.weekly_hours_json,
+        ftp_watts=profile.ftp_watts,
+        threshold_run_pace_per_km=profile.threshold_run_pace_per_km,
+        threshold_swim_pace_per_100m=profile.threshold_swim_pace_per_100m,
+        avg_weekly_hours=profile.avg_weekly_hours,
+        upcoming_races_json=profile.upcoming_races_json,
+        injury_history=profile.injury_history,
+    )
+
+    plan_data = _fixture_plan_with_sessions()
+    plan_repo = TrainingPlanRepo(conn)
+    for phase in plan_data["phases"]:
+        plan_repo.insert(
+            phase=phase["name"],
+            blocks_json=json.dumps({k: v for k, v in phase.items() if k not in ("name", "sessions")}),
+            sessions_json=json.dumps(phase["sessions"]),
+        )
+    conn.close()
+
+    gcal_responses = [{"id": "gcal-001"}, {"id": "gcal-002"}]
+    intervals_responses = [{"id": "int-001"}, {"id": "int-002"}]
+
+    real_conn = None
+
+    def _fake_init_db(path):
+        nonlocal real_conn
+        from t3.db import init_db as _init_db
+        real_conn = _init_db(path)
+        return real_conn
+
+    with (
+        patch("t3.tools.plan.settings") as mock_settings,
+        patch("t3.tools.plan.init_db", side_effect=_fake_init_db),
+        patch("t3.tools.plan.gcal.create_event", side_effect=gcal_responses) as mock_gcal,
+        patch("t3.tools.plan.intervals.create_planned_workout", side_effect=intervals_responses) as mock_intervals,
+    ):
+        mock_settings.database_url = db_path
+
+        from t3.tools.plan import confirm_plan
+
+        result = confirm_plan()
+
+    assert result == {"scheduled": 2}
+    assert mock_gcal.call_count == 2
+    assert mock_intervals.call_count == 2
+
+    assert real_conn is not None
+    cal_repo = CalendarEventRepo(real_conn)
+    assert cal_repo.count() == 2
