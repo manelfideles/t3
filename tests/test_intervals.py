@@ -28,9 +28,11 @@ def test_get_activities_returns_list(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result == fake_activities
     mock_client.get.assert_called_once()
-    # limit is applied client-side; no params sent to the API
+    # oldest/newest sent; limit applied client-side
     call_kwargs = mock_client.get.call_args
-    assert "params" not in (call_kwargs.kwargs or {})
+    params = call_kwargs.kwargs.get("params", {})
+    assert "oldest" in params
+    assert "newest" in params
 
 
 def test_get_activities_uses_correct_auth(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -86,7 +88,7 @@ def test_create_planned_workout_posts_correct_payload(monkeypatch: pytest.Monkey
 
     assert result == {"id": "evt1"}
     payload = mock_client.post.call_args.kwargs["json"]
-    assert payload["start_date_local"] == "2026-06-15"
+    assert payload["start_date_local"] == "2026-06-15T08:00:00"
     assert payload["type"] == "Swim"
     assert payload["name"] == "2km steady"
     assert payload["category"] == "WORKOUT"
