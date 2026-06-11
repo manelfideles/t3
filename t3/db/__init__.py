@@ -166,3 +166,68 @@ class AthleteRepo:
         self._conn.commit()
         assert cursor.lastrowid is not None
         return cursor.lastrowid
+
+    def load_latest(self) -> "AthleteProfileRow | None":
+        row = self._conn.execute(
+            """
+            SELECT name, age, sex, experience_level,
+                   weekly_hours_json, swim_baseline, bike_baseline, run_baseline,
+                   upcoming_races_json, injury_history
+            FROM athlete_profile ORDER BY id DESC LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            return None
+        return AthleteProfileRow(*row)
+
+
+@dataclass
+class AthleteProfileRow:
+    name: str | None
+    age: int | None
+    sex: str | None
+    experience_level: str | None
+    weekly_hours_json: str | None
+    swim_baseline: str | None
+    bike_baseline: str | None
+    run_baseline: str | None
+    upcoming_races_json: str | None
+    injury_history: str | None
+
+
+@dataclass
+class TrainingPlanRow:
+    id: int
+    phase: str
+    blocks_json: str | None
+    sessions_json: str | None
+    created_at: str
+
+
+class TrainingPlanRepo:
+    """Persist and load training plan phases."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def insert(self, phase: str, blocks_json: str | None, sessions_json: str | None) -> int:
+        cursor = self._conn.execute(
+            "INSERT INTO training_plan (phase, blocks_json, sessions_json) VALUES (?, ?, ?)",
+            (phase, blocks_json, sessions_json),
+        )
+        self._conn.commit()
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid
+
+    def load_latest(self) -> list[TrainingPlanRow]:
+        """Return all phases from the most recent plan generation (same created_at batch)."""
+        latest_ts = self._conn.execute(
+            "SELECT created_at FROM training_plan ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if latest_ts is None:
+            return []
+        rows = self._conn.execute(
+            "SELECT id, phase, blocks_json, sessions_json, created_at FROM training_plan WHERE created_at = ? ORDER BY id",
+            (latest_ts[0],),
+        ).fetchall()
+        return [TrainingPlanRow(*row) for row in rows]
