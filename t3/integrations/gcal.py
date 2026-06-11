@@ -11,6 +11,8 @@ from googleapiclient.discovery import build
 from t3.config import settings
 from t3.integrations.credential_store import GCAL_SCOPES, CredentialStore
 
+_T3_CALENDAR_NAME = "T3"
+
 
 def _free_port() -> int:
     with socket.socket() as s:
@@ -59,6 +61,16 @@ async def _wait_for_callback(port: int, timeout: float = 300.0) -> str:
         await server.wait_closed()
 
 
+def _get_or_create_t3_calendar(service) -> str:
+    """Return the calendarId for the 'T3' calendar, creating it if it doesn't exist."""
+    calendars = service.calendarList().list().execute()
+    for cal in calendars.get("items", []):
+        if cal.get("summary") == _T3_CALENDAR_NAME:
+            return cal["id"]
+    created = service.calendars().insert(body={"summary": _T3_CALENDAR_NAME}).execute()
+    return created["id"]
+
+
 async def run_oauth_flow(
     send_url_fn: Callable[[str], Awaitable[None]],
     db_path: str = "t3.db",
@@ -84,10 +96,11 @@ async def run_oauth_flow(
 def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[dict]:
     creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
+    calendar_id = _get_or_create_t3_calendar(service)
     result = (
         service.events()
         .list(
-            calendarId="primary",
+            calendarId=calendar_id,
             timeMin=time_min,
             timeMax=time_max,
             singleEvents=True,
@@ -101,9 +114,10 @@ def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[di
 def create_event(summary: str, start: str, end: str, db_path: str = "t3.db") -> dict:
     creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
+    calendar_id = _get_or_create_t3_calendar(service)
     event = {
         "summary": summary,
         "start": {"dateTime": start, "timeZone": "UTC"},
         "end": {"dateTime": end, "timeZone": "UTC"},
     }
-    return service.events().insert(calendarId="primary", body=event).execute()
+    return service.events().insert(calendarId=calendar_id, body=event).execute()
