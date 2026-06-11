@@ -8,7 +8,6 @@ from t3.credential_store import CredentialStore
 from t3.db import init_db
 from t3.gcal import _client_config, _free_port
 
-
 # --- helpers ---
 
 def _fake_creds(

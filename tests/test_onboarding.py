@@ -1,4 +1,3 @@
-import pytest
 
 from t3.db import init_db
 from t3.onboarding import (

@@ -2,11 +2,14 @@ import asyncio
 import logging
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+from t3.agent import build_client, run
 from t3.config import settings
 
 logger = logging.getLogger(__name__)
+
+_client = build_client()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -36,8 +39,19 @@ async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(f"Error: {exc}")
 
 
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_text = update.message.text or ""
+    try:
+        reply = await run(user_text, _client)
+        await update.message.reply_text(reply or "I didn't get a response. Try again.")
+    except Exception as exc:
+        logger.exception("Agent error")
+        await update.message.reply_text(f"Something went wrong: {exc}")
+
+
 def create_app() -> Application:
     app = Application.builder().token(settings.telegram_token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("connect_gcal", connect_gcal))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     return app

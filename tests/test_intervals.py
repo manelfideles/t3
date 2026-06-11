@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-
 # --- unit tests (mocked httpx) ---
 
 def _mock_response(json_data: object, status_code: int = 200) -> MagicMock:

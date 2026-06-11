@@ -5,13 +5,13 @@ from google import genai
 from google.genai import types
 
 from t3.config import settings
-import t3.tools.gcal_tools  # noqa: F401 — registers gcal tools on import
-import t3.tools.intervals_tools  # noqa: F401 — registers intervals tools on import
+import t3.tools.gcal  # noqa: F401 — registers gcal tools on import
+import t3.tools.intervals  # noqa: F401 — registers intervals tools on import
 from t3.tools.registry import REGISTRY
 
 logger = logging.getLogger(__name__)
 
-_MAX_TURNS = 10
+_MAX_TURNS = 5
 
 
 def build_client() -> genai.Client:
@@ -42,7 +42,11 @@ async def run(text: str, client: genai.Client) -> str:
         calls = [
             part.function_call
             for part in candidate.content.parts
-            if getattr(part, "function_call", None)
+            if getattr(
+                part,
+                "function_call",
+                None,
+            )
         ]
 
         if not calls:
@@ -53,7 +57,12 @@ async def run(text: str, client: genai.Client) -> str:
             types.Part(
                 function_response=types.FunctionResponse(
                     name=fn.name,
-                    response={"result": dispatch_tool(fn.name, dict(fn.args))},
+                    response={
+                        "result": dispatch_tool(
+                            fn.name,
+                            dict(fn.args),
+                        )
+                    },
                 )
             )
             for fn in calls
