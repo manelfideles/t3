@@ -36,3 +36,4 @@ pytest-results.xml
 
 # Data/Artifacts
 .agents
+*.db
