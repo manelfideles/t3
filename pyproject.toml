@@ -14,21 +14,16 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "pytest>=8.0",
-    "ruff>=0.9",
-    "ty",
-]
+dev = ["pytest>=8.0", "ruff>=0.9", "ty"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E", "F", "I"]
+lint.ignore = ["E731"]   # allow lambda methods inside other methods
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
 markers = [
     "integration: marks tests requiring live credentials (gcal, intervals.icu)",
 ]

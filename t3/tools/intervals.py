@@ -1,11 +1,13 @@
 from typing import Any
 
-from t3.intervals import (
+from t3.integrations.intervals import (
     create_planned_workout as _create_planned_workout,
     get_activities as _get_activities,
 )
+from t3.tools.registry import tool
 
 
+@tool
 def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     """Retrieve recent Intervals.icu activities.
 
@@ -15,20 +17,14 @@ def get_activities(limit: int = 10) -> list[dict[str, Any]]:
     return _get_activities(limit)
 
 
-def create_planned_workout(date: str, type: str, description: str) -> dict[str, Any]:
+@tool
+def create_planned_workout(date: str, workout_type: str, title: str, description: str) -> dict[str, Any]:
     """Write a planned workout to Intervals.icu.
 
     Args:
         date: ISO date string (e.g. '2026-06-11')
-        type: Workout type (Swim, Bike, Run)
-        description: Workout description
+        workout_type: Workout type (Swim, Bike, Run)
+        title: Short workout name (e.g. 'Easy run')
+        description: Full workout description
     """
-    return _create_planned_workout(date, type, description)
-
-
-INTERVALS_FUNCTIONS = [get_activities, create_planned_workout]
-
-INTERVALS_HANDLERS: dict[str, Any] = {
-    "get_activities": get_activities,
-    "create_planned_workout": create_planned_workout,
-}
+    return _create_planned_workout(date, workout_type, title, description)

@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     telegram_token: str = ""
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_fallback_model: str = "gemini-2.0-flash"
     database_url: str = "t3.db"
     google_client_id: str = ""
     google_client_secret: str = ""

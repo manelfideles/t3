@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
 
+from t3.db import AthleteRepo
+
 
 class OnboardingState(Enum):
     START = auto()
@@ -87,26 +89,15 @@ class OnboardingSession:
 
 def flush_to_db(session: OnboardingSession, conn: sqlite3.Connection) -> int:
     a = session.answers
-    cursor = conn.execute(
-        """
-        INSERT INTO athlete_profile (
-            name, age, sex, experience_level,
-            weekly_hours_json, swim_baseline, bike_baseline, run_baseline,
-            upcoming_races_json, injury_history
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            a.get("name"),
-            int(a["age"]) if a.get("age", "").isdigit() else None,
-            a.get("sex"),
-            a.get("experience"),
-            json.dumps({"weekly": a.get("weekly_hours")}),
-            a.get("swim_baseline"),
-            a.get("bike_baseline"),
-            a.get("run_baseline"),
-            json.dumps([a["upcoming_races"]]) if a.get("upcoming_races") else None,
-            a.get("injury_history"),
-        ),
+    return AthleteRepo(conn).save_profile(
+        name=a.get("name"),
+        age=int(a["age"]) if a.get("age", "").isdigit() else None,
+        sex=a.get("sex"),
+        experience_level=a.get("experience"),
+        weekly_hours_json=json.dumps({"weekly": a.get("weekly_hours")}),
+        swim_baseline=a.get("swim_baseline"),
+        bike_baseline=a.get("bike_baseline"),
+        run_baseline=a.get("run_baseline"),
+        upcoming_races_json=json.dumps([a["upcoming_races"]]) if a.get("upcoming_races") else None,
+        injury_history=a.get("injury_history"),
     )
-    conn.commit()
-    return cursor.lastrowid  # type: ignore[return-value]

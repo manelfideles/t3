@@ -4,14 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.oauth2.credentials import Credentials
 
+from t3.integrations.credential_store import CredentialStore
 from t3.db import init_db
-from t3.gcal import (
-    _client_config,
-    _free_port,
-    _load_credentials,
-    _store_tokens,
-)
-
+from t3.integrations.gcal import _client_config, _free_port
 
 # --- helpers ---
 
@@ -38,14 +33,13 @@ def test_free_port_returns_open_port() -> None:
 
     port = _free_port()
     assert 1024 < port < 65536
-    # Verify it's actually free
     with socket.socket() as s:
         s.bind(("localhost", port))
 
 
 def test_client_config_has_correct_keys(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("t3.gcal.settings.google_client_id", "test-client-id")
-    monkeypatch.setattr("t3.gcal.settings.google_client_secret", "test-secret")
+    monkeypatch.setattr("t3.integrations.gcal.settings.google_client_id", "test-client-id")
+    monkeypatch.setattr("t3.integrations.gcal.settings.google_client_secret", "test-secret")
     cfg = _client_config()
     assert "installed" in cfg
     assert cfg["installed"]["client_id"] == "test-client-id"
@@ -56,11 +50,12 @@ def test_client_config_has_correct_keys(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_store_and_load_tokens_roundtrip(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "test.db")
-    init_db(db)  # create schema
+    init_db(db)
     creds = _fake_creds(expiry=datetime(2026, 12, 31, tzinfo=timezone.utc))
+    store = CredentialStore(db)
 
-    _store_tokens(creds, db)
-    loaded = _load_credentials(db)
+    store.store(creds)
+    loaded = store.load()
 
     assert loaded is not None
     assert loaded.token == "access-token"
@@ -70,17 +65,18 @@ def test_store_and_load_tokens_roundtrip(tmp_path: pytest.TempPathFactory) -> No
 def test_load_credentials_returns_none_when_not_connected(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "empty.db")
     init_db(db)
-    assert _load_credentials(db) is None
+    assert CredentialStore(db).load() is None
 
 
 def test_store_tokens_upserts_on_reconnect(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
+    store = CredentialStore(db)
 
-    _store_tokens(_fake_creds(token="old-token"), db)
-    _store_tokens(_fake_creds(token="new-token"), db)
+    store.store(_fake_creds(token="old-token"))
+    store.store(_fake_creds(token="new-token"))
 
-    loaded = _load_credentials(db)
+    loaded = store.load()
     assert loaded is not None
     assert loaded.token == "new-token"
 
@@ -88,12 +84,12 @@ def test_store_tokens_upserts_on_reconnect(tmp_path: pytest.TempPathFactory) -> 
 def test_store_tokens_handles_missing_expiry(tmp_path: pytest.TempPathFactory) -> None:
     db = str(tmp_path / "test.db")
     init_db(db)
-    _store_tokens(_fake_creds(expiry=None), db)
-    loaded = _load_credentials(db)
-    assert loaded is not None
+    store = CredentialStore(db)
+    store.store(_fake_creds(expiry=None))
+    assert store.load() is not None
 
 
-# --- bot handler unit test ---
+# --- bot handler unit tests ---
 
 @pytest.mark.anyio
 async def test_connect_gcal_handler_success() -> None:
@@ -103,11 +99,10 @@ async def test_connect_gcal_handler_success() -> None:
     update.message.reply_text = AsyncMock()
     context = MagicMock()
 
-    with patch("t3.gcal.run_oauth_flow", new=AsyncMock()) as mock_flow:
+    with patch("t3.integrations.gcal.run_oauth_flow", new=AsyncMock()) as mock_flow:
         await connect_gcal(update, context)
 
     mock_flow.assert_called_once()
-    # Last reply should confirm success
     last_reply = update.message.reply_text.call_args_list[-1].args[0]
     assert "connected" in last_reply.lower()
 
@@ -122,7 +117,7 @@ async def test_connect_gcal_handler_timeout() -> None:
     update.message.reply_text = AsyncMock()
     context = MagicMock()
 
-    with patch("t3.gcal.run_oauth_flow", side_effect=asyncio.TimeoutError):
+    with patch("t3.integrations.gcal.run_oauth_flow", side_effect=asyncio.TimeoutError):
         await connect_gcal(update, context)
 
     last_reply = update.message.reply_text.call_args_list[-1].args[0]
@@ -134,7 +129,7 @@ async def test_connect_gcal_handler_timeout() -> None:
 @pytest.mark.integration
 def test_list_events_live() -> None:
     from t3.config import settings
-    from t3.gcal import list_events
+    from t3.integrations.gcal import list_events
 
     if not settings.google_client_id:
         pytest.skip("GOOGLE_CLIENT_ID not set")
@@ -149,7 +144,7 @@ def test_list_events_live() -> None:
 @pytest.mark.integration
 def test_create_event_live() -> None:
     from t3.config import settings
-    from t3.gcal import create_event
+    from t3.integrations.gcal import create_event
 
     if not settings.google_client_id:
         pytest.skip("GOOGLE_CLIENT_ID not set")

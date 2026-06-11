@@ -5,15 +5,13 @@ import socket
 from collections.abc import Awaitable, Callable
 from urllib.parse import parse_qs, urlparse
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
 from t3.config import settings
-from t3.db import init_db
+from t3.integrations.credential_store import GCAL_SCOPES, CredentialStore
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+T3_CALENDAR_NAME = "T3"
 
 
 def _free_port() -> int:
@@ -63,6 +61,16 @@ async def _wait_for_callback(port: int, timeout: float = 300.0) -> str:
         await server.wait_closed()
 
 
+def _get_calendar(service, calendar_id: str) -> str:
+    """Return the calendarId for the 'T3' calendar, creating it if it doesn't exist."""
+    calendars = service.calendarList().list().execute()
+    for cal in calendars.get("items", []):
+        if cal.get("summary") == calendar_id:
+            return cal["id"]
+    created = service.calendars().insert(body={"summary": calendar_id}).execute()
+    return created["id"]
+
+
 async def run_oauth_flow(
     send_url_fn: Callable[[str], Awaitable[None]],
     db_path: str = "t3.db",
@@ -75,71 +83,24 @@ async def run_oauth_flow(
     port = _free_port()
     redirect_uri = f"http://localhost:{port}"
 
-    flow = Flow.from_client_config(_client_config(), scopes=SCOPES, redirect_uri=redirect_uri)
+    flow = Flow.from_client_config(_client_config(), scopes=GCAL_SCOPES, redirect_uri=redirect_uri)
     auth_url, _ = flow.authorization_url(access_type="offline", prompt="consent")
 
     await send_url_fn(auth_url)
 
     code = await _wait_for_callback(port)
-    # fetch_token is a blocking HTTP call — run in thread to avoid stalling the event loop
     await asyncio.to_thread(flow.fetch_token, code=code)
-    _store_tokens(flow.credentials, db_path)
-
-
-def _store_tokens(creds: Credentials, db_path: str = "t3.db") -> None:
-    conn = init_db(db_path)
-    conn.execute(
-        """
-        INSERT INTO oauth_tokens (service, access_token, refresh_token, expires_at)
-        VALUES ('gcal', ?, ?, ?)
-        ON CONFLICT(service) DO UPDATE SET
-            access_token  = excluded.access_token,
-            refresh_token = excluded.refresh_token,
-            expires_at    = excluded.expires_at
-        """,
-        (
-            creds.token,
-            creds.refresh_token,
-            creds.expiry.isoformat() if creds.expiry else None,
-        ),
-    )
-    conn.commit()
-
-
-def _load_credentials(db_path: str = "t3.db") -> Credentials | None:
-    conn = init_db(db_path)
-    row = conn.execute(
-        "SELECT access_token, refresh_token, expires_at FROM oauth_tokens WHERE service = 'gcal'"
-    ).fetchone()
-    if row is None:
-        return None
-    return Credentials(
-        token=row[0],
-        refresh_token=row[1],
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.google_client_id,
-        client_secret=settings.google_client_secret,
-        scopes=SCOPES,
-    )
-
-
-def _get_valid_credentials(db_path: str = "t3.db") -> Credentials:
-    creds = _load_credentials(db_path)
-    if creds is None:
-        raise RuntimeError("Google Calendar not connected. Send /connect_gcal to authorize.")
-    if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        _store_tokens(creds, db_path)
-    return creds
+    CredentialStore(db_path).store(flow.credentials)
 
 
 def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[dict]:
-    creds = _get_valid_credentials(db_path)
+    creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
+    calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
     result = (
         service.events()
         .list(
-            calendarId="primary",
+            calendarId=calendar_id,
             timeMin=time_min,
             timeMax=time_max,
             singleEvents=True,
@@ -151,11 +112,12 @@ def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[di
 
 
 def create_event(summary: str, start: str, end: str, db_path: str = "t3.db") -> dict:
-    creds = _get_valid_credentials(db_path)
+    creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
+    calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
     event = {
-        "summary": summary,
+        "summary": f"T3 - {summary}" if not summary.startswith("T3 - ") else summary,
         "start": {"dateTime": start, "timeZone": "UTC"},
         "end": {"dateTime": end, "timeZone": "UTC"},
     }
-    return service.events().insert(calendarId="primary", body=event).execute()
+    return service.events().insert(calendarId=calendar_id, body=event).execute()
