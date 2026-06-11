@@ -189,11 +189,11 @@ oauth_tokens        -- service, access_token, refresh_token, expires_at
 1. Bot starts → guided Google OAuth via Telegram link
 2. Guided Intervals.icu API key setup (step-by-step instructions)
 3. Athlete profile questionnaire (~10–12 questions):
-   - Name, age, sex
+   - Name, age, sex, weight, height. The agent should hit Intervals to get these metrics. Fallback to asking the user if unable to retrieve them.
    - Triathlon experience level
    - Weekly hours available (by day)
-   - Swim / bike / run baseline (current fitness)
-   - Upcoming races + target dates + priority (A/B/C)
+   - Swim / bike / run baseline (current fitness). The agent should hit Intervals to get these metrics. Fallback to asking the user if unable to retrieve them.
+   - Upcoming races + target dates + priority (A/B/C). The agent should hit Intervals to get these metrics. Fallback to asking the user if unable to retrieve them.
    - Injury history
    - Notification preferences (digest vs full proactive)
 4. Agent generates year plan → previews it → user confirms → schedules everything on GCal and Intervals.icu
