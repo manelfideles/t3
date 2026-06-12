@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from typing import Any, Callable, cast
 
 
@@ -12,6 +14,15 @@ class ToolRegistry:
         self._functions.append(fn)
         self._handlers[cast(Any, fn).__name__] = fn
         return fn
+
+    def discover(self, package: str) -> None:
+        """Import every module under *package* so their @tool decorators fire."""
+        mod = importlib.import_module(package)
+        pkg_path = getattr(mod, "__path__", None)
+        if pkg_path is None:
+            return
+        for _, name, _ in pkgutil.walk_packages(pkg_path, prefix=f"{package}."):
+            importlib.import_module(name)
 
     @property
     def functions(self) -> list[Callable[..., Any]]:

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from t3.db import AthleteProfileRow, TrainingPlanRepo, init_db
+from t3.db import AthleteProfileRow, TrainingPlanRepo, TrainingPlanRow, init_db
 
 
 def _fixture_profile() -> AthleteProfileRow:
@@ -116,6 +116,37 @@ def test_generate_training_plan_registered_in_registry() -> None:
 
     names = [getattr(fn, "__name__", None) for fn in REGISTRY.functions]
     assert "generate_training_plan" in names
+
+
+def test_schedule_sessions_computes_absolute_dates() -> None:
+    from t3.tools.plan import schedule_sessions
+
+    phases = [
+        TrainingPlanRow(
+            id=1,
+            phase="Base",
+            blocks_json='{"start": "2026-06-15", "end": "2026-06-28", "weeks": 2, "weekly_hours": 7.5}',
+            sessions_json=json.dumps([
+                {"week": 1, "day": "monday", "discipline": "swim", "type": "easy", "duration_min": 45, "intensity": "low"},
+                {"week": 1, "day": "wednesday", "discipline": "run", "type": "threshold", "duration_min": 60, "intensity": "high"},
+                {"week": 2, "day": "saturday", "discipline": "bike", "type": "long", "duration_min": 120, "intensity": "moderate"},
+            ]),
+            created_at="2026-06-12T00:00:00",
+        )
+    ]
+
+    sessions = schedule_sessions(phases)
+
+    assert len(sessions) == 3
+    assert sessions[0].session_date == date(2026, 6, 15)   # week 1, monday
+    assert sessions[0].summary == "swim – easy"
+    assert sessions[1].session_date == date(2026, 6, 17)   # week 1, wednesday
+    assert sessions[2].session_date == date(2026, 6, 27)   # week 2, saturday
+
+
+def test_schedule_sessions_empty_phases_returns_empty() -> None:
+    from t3.tools.plan import schedule_sessions
+    assert schedule_sessions([]) == []
 
 
 def _fixture_plan_with_sessions() -> dict:
