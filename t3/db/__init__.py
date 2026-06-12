@@ -237,3 +237,21 @@ class TrainingPlanRepo:
             (latest_ts[0],),
         ).fetchall()
         return [TrainingPlanRow(*row) for row in rows]
+
+
+class CalendarEventRepo:
+    """Read/write calendar_events rows written by confirm_plan."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def insert(self, gcal_id: str, intervals_id: str, scheduled_at: str, event_type: str) -> None:
+        self._conn.execute(
+            "INSERT INTO calendar_events (gcal_id, intervals_id, scheduled_at, event_type) VALUES (?, ?, ?, ?)",
+            (gcal_id, intervals_id, scheduled_at, event_type),
+        )
+        self._conn.commit()
+
+    def count(self) -> int:
+        row = self._conn.execute("SELECT COUNT(*) FROM calendar_events").fetchone()
+        return row[0] if row else 0
