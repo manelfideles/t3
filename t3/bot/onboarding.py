@@ -31,6 +31,43 @@ class IntervalsDerivedProfile:
     experience_level: str | None
 
 
+def _extract_ftp(athlete: dict) -> int | None:
+    for sport in athlete.get("sportSettings", []):
+        if "Ride" in sport.get("types", []):
+            ftp = sport.get("ftp")
+            if ftp is not None:
+                return int(ftp)
+            mmp = sport.get("mmp_model") or {}
+            if mmp.get("ftp") is not None:
+                return int(mmp["ftp"])
+    return athlete.get("ftp")
+
+
+def _extract_age(athlete: dict) -> int | None:
+    dob_str = athlete.get("icu_date_of_birth")
+    if dob_str:
+        try:
+            dob = datetime.strptime(dob_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            return now.year - dob.year - ((now.month, now.day) < (dob.month, dob.day))
+        except ValueError:
+            pass
+    return athlete.get("age")
+
+
+def _normalise_sex(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    return {"M": "male", "F": "female"}.get(raw.upper(), raw.lower())
+
+
+def _extract_height_cm(athlete: dict) -> float | None:
+    h = athlete.get("height")
+    if h is None:
+        return None
+    return round(h * 100, 1) if h < 3 else float(h)
+
+
 def _derive_experience_level(past_races: list[dict]) -> str:
     if not past_races:
         return "beginner"
@@ -56,19 +93,27 @@ def fetch_profile_from_intervals() -> IntervalsDerivedProfile:
     now_str = now.strftime("%Y-%m-%dT%H:%M:%S")
 
     events = get_events(history_start, future_end)
-    upcoming_races = [e for e in events if e.get("category") == "RACE" and e.get("start_date_local", "") >= now_str]
-    injuries = [e for e in events if e.get("category") == "INJURED"]
-    past_races = [e for e in events if e.get("category") == "RACE" and e.get("start_date_local", "") < now_str]
+    upcoming_races = [
+        e
+        for e in events
+        if e.get("category", "").upper().startswith("RACE") and e.get("start_date_local", "") >= now_str
+    ]
+    injuries = [e for e in events if e.get("category", "").upper() == "INJURED"]
+    past_races = [
+        e
+        for e in events
+        if e.get("category", "").upper().startswith("RACE") and e.get("start_date_local", "") < now_str
+    ]
 
     efforts = get_best_efforts(days=28)
 
     return IntervalsDerivedProfile(
         name=athlete.get("name"),
-        age=athlete.get("age"),
-        sex=athlete.get("sex"),
-        ftp_watts=athlete.get("ftp"),
-        weight_kg=athlete.get("weight"),
-        height_cm=athlete.get("height"),
+        age=_extract_age(athlete),
+        sex=_normalise_sex(athlete.get("sex")),
+        ftp_watts=_extract_ftp(athlete),
+        weight_kg=athlete.get("weight") or athlete.get("icu_weight"),
+        height_cm=_extract_height_cm(athlete),
         avg_weekly_hours=efforts.get("avg_weekly_hours"),
         threshold_run_pace_per_km=efforts.get("threshold_run_pace_per_km"),
         threshold_swim_pace_per_100m=efforts.get("threshold_swim_pace_per_100m"),
@@ -76,6 +121,11 @@ def fetch_profile_from_intervals() -> IntervalsDerivedProfile:
         injury_history=injuries,
         experience_level=_derive_experience_level(past_races),
     )
+
+
+def _fmt_pace(decimal_min: float) -> str:
+    total_sec = round(decimal_min * 60)
+    return f"{total_sec // 60}:{total_sec % 60:02d}"
 
 
 def format_confirmation_message(profile: IntervalsDerivedProfile) -> str:
@@ -93,15 +143,18 @@ def format_confirmation_message(profile: IntervalsDerivedProfile) -> str:
     if profile.avg_weekly_hours is not None:
         lines.append(f"• Avg weekly training hours: {profile.avg_weekly_hours}h")
     if profile.threshold_run_pace_per_km is not None:
-        lines.append(f"• Threshold run pace: {profile.threshold_run_pace_per_km} min/km")
+        lines.append(f"• Threshold run pace: {_fmt_pace(profile.threshold_run_pace_per_km)} min/km")
     if profile.threshold_swim_pace_per_100m is not None:
-        lines.append(f"• Threshold swim pace: {profile.threshold_swim_pace_per_100m} min/100m")
+        lines.append(f"• Threshold swim pace: {_fmt_pace(profile.threshold_swim_pace_per_100m)} min/100m")
     if profile.weight_kg is not None:
         lines.append(f"• Weight: {profile.weight_kg} kg")
     if profile.height_cm is not None:
         lines.append(f"• Height: {profile.height_cm} cm")
     race_count = len(profile.upcoming_races)
-    lines.append(f"• Upcoming races: {race_count}")
+    if race_count:
+        lines.append(f"• Upcoming races: {race_count}")
+    else:
+        lines.append("• Upcoming races: none found — add a race to your Intervals.icu calendar for a targeted plan")
     if profile.injury_history:
         lines.append(f"• Injury events on record: {len(profile.injury_history)}")
     lines.append("\nDoes this look right? Reply *yes* to proceed, or tell me what to correct.")

@@ -69,10 +69,69 @@ EXPECTED_TABLES = frozenset(
 )
 
 
+# Columns that must exist on each table. Any column present here but missing
+# from an existing table is added via ALTER TABLE so old DBs are never stranded.
+_REQUIRED_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "athlete_profile": [
+        ("name", "TEXT"),
+        ("age", "INTEGER"),
+        ("sex", "TEXT"),
+        ("weight_kg", "REAL"),
+        ("height_cm", "REAL"),
+        ("experience_level", "TEXT"),
+        ("weekly_hours_json", "TEXT"),
+        ("ftp_watts", "INTEGER"),
+        ("threshold_run_pace_per_km", "REAL"),
+        ("threshold_swim_pace_per_100m", "REAL"),
+        ("avg_weekly_hours", "REAL"),
+        ("upcoming_races_json", "TEXT"),
+        ("injury_history", "TEXT"),
+        ("created_at", "TEXT"),
+        ("updated_at", "TEXT"),
+    ],
+    "training_plan": [
+        ("phase", "TEXT"),
+        ("blocks_json", "TEXT"),
+        ("sessions_json", "TEXT"),
+        ("created_at", "TEXT"),
+    ],
+    "calendar_events": [
+        ("gcal_id", "TEXT"),
+        ("intervals_id", "TEXT"),
+        ("scheduled_at", "TEXT"),
+        ("event_type", "TEXT"),
+        ("last_synced_at", "TEXT"),
+    ],
+    "notification_prefs": [
+        ("digest_mode", "INTEGER"),
+        ("post_session", "INTEGER"),
+        ("weather_warnings", "INTEGER"),
+        ("digest_day", "TEXT"),
+        ("digest_time", "TEXT"),
+    ],
+    "oauth_tokens": [
+        ("service", "TEXT"),
+        ("access_token", "TEXT"),
+        ("refresh_token", "TEXT"),
+        ("expires_at", "TEXT"),
+    ],
+}
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    """Add any columns present in _REQUIRED_COLUMNS that are missing from existing tables."""
+    for table, columns in _REQUIRED_COLUMNS.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for col_name, col_type in columns:
+            if col_name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+    conn.commit()
+
+
 def init_db(db_path: str = ":memory:") -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.executescript(SCHEMA)
-    conn.commit()
+    _apply_migrations(conn)
     return conn
 
 

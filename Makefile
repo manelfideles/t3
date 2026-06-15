@@ -15,7 +15,7 @@ typecheck:
 check: lint typecheck test
 
 run:
-	uv run pytest
+	uv run python -m t3
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +

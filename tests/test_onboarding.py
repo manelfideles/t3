@@ -8,6 +8,10 @@ import pytest
 from t3.bot.onboarding import (
     IntervalsDerivedProfile,
     _derive_experience_level,
+    _extract_age,
+    _extract_ftp,
+    _extract_height_cm,
+    _normalise_sex,
     apply_corrections,
     fetch_profile_from_intervals,
     flush_to_db,
@@ -29,10 +33,10 @@ _ATHLETE = {
 }
 
 _EVENTS = [
-    # upcoming race
-    {"category": "RACE", "name": "City Olympic", "start_date_local": "2026-09-20T08:00:00"},
-    # past race — olympic
-    {"category": "RACE", "name": "Sprint Tri 2025", "start_date_local": "2025-06-01T08:00:00"},
+    # upcoming race — real API uses RACE_A/B/C
+    {"category": "RACE_A", "name": "City Olympic", "start_date_local": "2026-09-20T08:00:00"},
+    # past race
+    {"category": "RACE_C", "name": "Sprint Tri 2025", "start_date_local": "2025-06-01T08:00:00"},
     # injury
     {"category": "INJURED", "name": "Knee tendinitis", "start_date_local": "2025-03-01T00:00:00"},
 ]
@@ -92,6 +96,67 @@ def test_derive_experience_full_ironman_returns_advanced() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _extract_ftp / _extract_age / _normalise_sex / _extract_height_cm
+# ---------------------------------------------------------------------------
+
+
+def test_extract_ftp_reads_sport_settings_ride() -> None:
+    athlete = {"sportSettings": [{"types": ["Ride", "VirtualRide"], "ftp": 239, "mmp_model": None}]}
+    assert _extract_ftp(athlete) == 239
+
+
+def test_extract_ftp_falls_back_to_mmp_model() -> None:
+    athlete = {"sportSettings": [{"types": ["Ride"], "ftp": None, "mmp_model": {"ftp": 243}}]}
+    assert _extract_ftp(athlete) == 243
+
+
+def test_extract_ftp_falls_back_to_top_level_ftp() -> None:
+    assert _extract_ftp({"ftp": 240}) == 240
+
+
+def test_extract_ftp_returns_none_when_absent() -> None:
+    assert _extract_ftp({}) is None
+
+
+def test_extract_age_from_dob() -> None:
+    athlete = {"icu_date_of_birth": "2000-03-18"}
+    age = _extract_age(athlete)
+    assert age is not None and 25 <= age <= 27
+
+
+def test_extract_age_falls_back_to_age_field() -> None:
+    assert _extract_age({"age": 32}) == 32
+
+
+def test_normalise_sex_upper_M() -> None:
+    assert _normalise_sex("M") == "male"
+
+
+def test_normalise_sex_upper_F() -> None:
+    assert _normalise_sex("F") == "female"
+
+
+def test_normalise_sex_already_word() -> None:
+    assert _normalise_sex("male") == "male"
+
+
+def test_normalise_sex_none() -> None:
+    assert _normalise_sex(None) is None
+
+
+def test_extract_height_cm_converts_meters() -> None:
+    assert _extract_height_cm({"height": 1.75}) == pytest.approx(175.0)
+
+
+def test_extract_height_cm_passes_through_cm() -> None:
+    assert _extract_height_cm({"height": 178}) == pytest.approx(178.0)
+
+
+def test_extract_height_cm_none() -> None:
+    assert _extract_height_cm({}) is None
+
+
+# ---------------------------------------------------------------------------
 # fetch_profile_from_intervals
 # ---------------------------------------------------------------------------
 
@@ -132,6 +197,20 @@ def test_fetch_profile_maps_best_effort_fields() -> None:
     assert profile.avg_weekly_hours == 8.5
     assert profile.threshold_run_pace_per_km == pytest.approx(4.8)
     assert profile.threshold_swim_pace_per_100m == pytest.approx(1.9)
+
+
+def test_fetch_profile_detects_race_with_race_a_category() -> None:
+    events_with_lowercase = [
+        {"category": "race_a", "name": "Sunday Sprint", "start_date_local": "2026-09-14T08:00:00"},
+    ]
+    with (
+        patch("t3.bot.onboarding.get_athlete_settings", return_value=_ATHLETE),
+        patch("t3.bot.onboarding.get_events", return_value=events_with_lowercase),
+        patch("t3.bot.onboarding.get_best_efforts", return_value=_EFFORTS),
+    ):
+        profile = fetch_profile_from_intervals()
+    assert len(profile.upcoming_races) == 1
+    assert profile.upcoming_races[0]["name"] == "Sunday Sprint"
 
 
 def test_fetch_profile_separates_upcoming_and_past_races() -> None:
@@ -180,10 +259,10 @@ def test_format_confirmation_message_contains_all_key_fields() -> None:
     msg = format_confirmation_message(profile)
 
     assert "Manuel" in msg
-    assert "240" in msg  # FTP
-    assert "4.8" in msg  # run pace
-    assert "1.9" in msg  # swim pace
-    assert "8.5" in msg  # weekly hours
+    assert "240" in msg   # FTP
+    assert "4:48" in msg  # run pace: 4.8 min/km → 4:48
+    assert "1:54" in msg  # swim pace: 1.9 min/100m → 1:54
+    assert "8.5" in msg   # weekly hours
     assert "yes" in msg.lower()
 
 

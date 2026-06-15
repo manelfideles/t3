@@ -112,12 +112,12 @@ async def test_start_skips_onboarding_when_profile_exists(monkeypatch: pytest.Mo
 
 
 # ---------------------------------------------------------------------------
-# /start — no upcoming races
+# /start — no upcoming races: must NOT block; must proceed to confirmation
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-async def test_start_stops_when_no_upcoming_races(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_start_proceeds_with_no_upcoming_races(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("t3.bot.settings.intervals_api_key", "key")
     monkeypatch.setattr("t3.bot.settings.intervals_athlete_id", "i123")
 
@@ -128,15 +128,15 @@ async def test_start_stops_when_no_upcoming_races(monkeypatch: pytest.MonkeyPatc
         patch("t3.bot.init_db"),
         patch("t3.bot.AthleteRepo", return_value=mock_repo),
         patch("t3.bot.fetch_profile_from_intervals", return_value=_fixture_profile(upcoming=[])),
+        patch("t3.bot.format_confirmation_message", return_value="*Profile:*\nFTP: 240W\nReply yes."),
     ):
         from t3.bot import start
 
         update, context = _make_update()
         await start(update, context)
 
-    reply = update.message.reply_text.call_args[0][0]
-    assert "race" in reply.lower()
-    assert context.user_data.get("onboarding_state") is None
+    # Must NOT hard-stop; onboarding state must be set
+    assert context.user_data.get("onboarding_state") == "AWAITING_CONFIRMATION"
 
 
 # ---------------------------------------------------------------------------

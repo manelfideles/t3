@@ -5,6 +5,42 @@ import pytest
 from t3.db import EXPECTED_TABLES, AthleteRepo, TrainingPlanRepo, get_tables, init_db
 
 
+def test_init_db_adds_missing_columns_to_existing_table(tmp_path) -> None:
+    """init_db must migrate a pre-existing DB that lacks columns added after initial creation."""
+    db_path = str(tmp_path / "old.db")
+    # Create the table WITHOUT ftp_watts and the threshold columns — simulating an old DB
+    conn = sqlite3.connect(db_path)
+    conn.executescript("""
+        CREATE TABLE athlete_profile (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            age INTEGER,
+            sex TEXT,
+            experience_level TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+    # init_db must detect and add the missing columns
+    conn = init_db(db_path)
+
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(athlete_profile)").fetchall()}
+    for expected in ("ftp_watts", "threshold_run_pace_per_km", "threshold_swim_pace_per_100m", "avg_weekly_hours"):
+        assert expected in cols, f"Migration failed to add column: {expected}"
+
+    # Must also be usable — no OperationalError
+    repo = AthleteRepo(conn)
+    repo.save_profile(
+        name="Alice", age=32, sex="female", experience_level="intermediate",
+        weekly_hours_json=None, ftp_watts=240, threshold_run_pace_per_km=5.2,
+        threshold_swim_pace_per_100m=2.1, avg_weekly_hours=7.5,
+        upcoming_races_json=None, injury_history=None,
+    )
+    assert repo.load_latest() is not None
+
+
 def test_schema_creates_all_five_tables() -> None:
     conn = init_db()
     assert get_tables(conn) == EXPECTED_TABLES

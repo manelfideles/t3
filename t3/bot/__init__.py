@@ -63,13 +63,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await message.reply_text(f"Could not fetch your Intervals.icu data: {exc}")
         return
 
-    if not profile.upcoming_races:
-        await message.reply_text(
-            "No upcoming races found in Intervals.icu. "
-            "Please add at least one race to your Intervals.icu calendar first, then run /start again."
-        )
-        return
-
     if context.user_data is None:
         return
     context.user_data["pending_profile"] = profile
