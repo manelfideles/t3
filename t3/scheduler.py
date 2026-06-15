@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
 
@@ -18,6 +19,13 @@ def _make_poll_job(conn: sqlite3.Connection):  # type: ignore[return]
         global _poll_count
         _poll_count += 1
         logger.info("poll cycle %d", _poll_count)
+        try:
+            from t3.sync import poll_gcal
+            changes = await asyncio.get_event_loop().run_in_executor(None, poll_gcal, conn)
+            if changes:
+                logger.info("poll cycle %d: %d change(s) detected", _poll_count, len(changes))
+        except Exception:
+            logger.exception("poll cycle %d failed", _poll_count)
 
     return _poll_job
 
