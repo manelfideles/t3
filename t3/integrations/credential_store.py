@@ -36,8 +36,8 @@ class CredentialStore:
         expiry = None
         if row.expires_at:
             expiry = datetime.fromisoformat(row.expires_at)
-            if expiry.tzinfo is None:
-                expiry = expiry.replace(tzinfo=timezone.utc)
+            if expiry.tzinfo is not None:
+                expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
         return Credentials(
             token=row.access_token,
             refresh_token=row.refresh_token,
