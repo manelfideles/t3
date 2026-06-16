@@ -93,21 +93,25 @@ async def run_oauth_flow(
     CredentialStore(db_path).store(flow.credentials)
 
 
-def list_events(time_min: str, time_max: str, db_path: str = "t3.db") -> list[dict]:
+def list_events(
+    time_min: str,
+    time_max: str,
+    db_path: str = "t3.db",
+    updated_min: str | None = None,
+) -> list[dict]:
     creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
     calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
-    result = (
-        service.events()
-        .list(
-            calendarId=calendar_id,
-            timeMin=time_min,
-            timeMax=time_max,
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
+    kwargs: dict = {
+        "calendarId": calendar_id,
+        "timeMin": time_min,
+        "timeMax": time_max,
+        "singleEvents": True,
+        "orderBy": "startTime",
+    }
+    if updated_min is not None:
+        kwargs["updatedMin"] = updated_min
+    result = service.events().list(**kwargs).execute()
     return result.get("items", [])
 
 

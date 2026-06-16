@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
@@ -31,6 +33,11 @@ class CredentialStore:
         row = self._repo().load("gcal")
         if row is None:
             return None
+        expiry = None
+        if row.expires_at:
+            expiry = datetime.fromisoformat(row.expires_at)
+            if expiry.tzinfo is not None:
+                expiry = expiry.astimezone(timezone.utc).replace(tzinfo=None)
         return Credentials(
             token=row.access_token,
             refresh_token=row.refresh_token,
@@ -38,6 +45,7 @@ class CredentialStore:
             client_id=settings.google_client_id,
             client_secret=settings.google_client_secret,
             scopes=GCAL_SCOPES,
+            expiry=expiry,
         )
 
     def get_valid(self) -> Credentials:
