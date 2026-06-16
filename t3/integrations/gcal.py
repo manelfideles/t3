@@ -125,3 +125,20 @@ def create_event(summary: str, start: str, end: str, db_path: str = "t3.db") -> 
         "end": {"dateTime": end, "timeZone": "UTC"},
     }
     return service.events().insert(calendarId=calendar_id, body=event).execute()
+
+
+def update_event_time(gcal_id: str, new_start: str, db_path: str = "t3.db") -> dict:
+    creds = CredentialStore(db_path).get_valid()
+    service = build("calendar", "v3", credentials=creds)
+    calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
+    event = service.events().get(calendarId=calendar_id, eventId=gcal_id).execute()
+    event["start"] = {"dateTime": new_start, "timeZone": "UTC"}
+    event["end"] = {"dateTime": new_start, "timeZone": "UTC"}
+    return service.events().update(calendarId=calendar_id, eventId=gcal_id, body=event).execute()
+
+
+def delete_event(gcal_id: str, db_path: str = "t3.db") -> None:
+    creds = CredentialStore(db_path).get_valid()
+    service = build("calendar", "v3", credentials=creds)
+    calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
+    service.events().delete(calendarId=calendar_id, eventId=gcal_id).execute()
