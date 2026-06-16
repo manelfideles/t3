@@ -269,3 +269,58 @@ async def test_handle_message_routes_to_agent_when_not_onboarding() -> None:
         await handle_message(update, context)
 
     update.message.reply_text.assert_called_once_with("Swim 3km this week.")
+
+
+# ---------------------------------------------------------------------------
+# Conflict confirmation routing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_handle_message_routes_to_conflict_when_pending() -> None:
+    from t3.bot.confirmation import PendingConflict, _pending, add_pending_conflict
+    from t3.sync import ConflictInfo
+
+    _pending.clear()
+    chat_id = 55555
+
+    update, context = _make_update("1")
+    update.message.chat_id = chat_id
+
+    pending = PendingConflict(
+        conflict=ConflictInfo("m-id", "c-id", "2026-07-14T06:00:00+00:00", "2026-07-15T06:00:00+00:00", "2026-07-15T07:00:00+00:00"),
+        moved_intervals_id=None,
+        conflicting_intervals_id=None,
+    )
+    add_pending_conflict(chat_id, pending)
+
+    with (
+        patch("t3.bot.init_db"),
+        patch("t3.bot._handle_conflict_reply", new_callable=AsyncMock) as mock_conflict,
+    ):
+        from t3.bot import handle_message
+
+        await handle_message(update, context)
+
+    mock_conflict.assert_called_once()
+    _pending.clear()
+
+
+@pytest.mark.anyio
+async def test_handle_message_does_not_route_to_conflict_when_not_pending() -> None:
+    from t3.bot.confirmation import _pending
+
+    _pending.clear()
+
+    update, context = _make_update("Hello!")
+    update.message.chat_id = 77777
+
+    with (
+        patch("t3.bot._get_client", return_value=MagicMock()),
+        patch("t3.bot.run", new_callable=AsyncMock, return_value="Hello back!"),
+    ):
+        from t3.bot import handle_message
+
+        await handle_message(update, context)
+
+    update.message.reply_text.assert_called_once_with("Hello back!")

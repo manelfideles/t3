@@ -134,13 +134,63 @@ async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await message.reply_text(f"Error: {exc}")
 
 
+async def _handle_conflict_reply(update: Update, chat_id: int, user_text: str) -> None:
+    from t3.bot.confirmation import (
+        _pending,
+        clear_pending,
+        has_pending,
+        resolve,
+    )
+    from t3.integrations import gcal as gcal_integration
+    from t3.integrations import intervals as intervals_integration
+
+    if not has_pending(chat_id):
+        return
+
+    pending = _pending[chat_id]
+
+    class _GCal:
+        def update_event_time(self, gcal_id: str, new_start: str) -> dict:
+            return gcal_integration.update_event_time(gcal_id, new_start, db_path=settings.database_url)
+
+        def delete_event(self, gcal_id: str) -> None:
+            gcal_integration.delete_event(gcal_id, db_path=settings.database_url)
+
+    class _Intervals:
+        def update_workout_date(self, intervals_id: str, new_date: str) -> dict:
+            return intervals_integration.update_workout_date(intervals_id, new_date)
+
+        def delete_workout(self, intervals_id: str) -> None:
+            intervals_integration.delete_workout(intervals_id)
+
+    try:
+        choice = int(user_text.strip())
+    except ValueError:
+        if update.message:
+            await update.message.reply_text("Please reply with 1, 2, or 3.")
+        return
+
+    conn = init_db(settings.database_url)
+    msg = resolve(choice, pending, conn, _GCal(), _Intervals())
+    clear_pending(chat_id)
+    if update.message:
+        await update.message.reply_text(msg)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
     user_text = update.message.text or ""
+    chat_id = update.message.chat_id
 
     if context.user_data is not None and context.user_data.get("onboarding_state") == "AWAITING_CONFIRMATION":
         await _handle_onboarding_reply(update, context, user_text)
+        return
+
+    from t3.bot.confirmation import has_pending
+
+    if has_pending(chat_id):
+        await _handle_conflict_reply(update, chat_id, user_text)
         return
 
     try:

@@ -146,3 +146,18 @@ def test_sync_state_repo_chat_id(conn) -> None:
     assert repo.get_telegram_chat_id() == 123456789
     repo.set_telegram_chat_id(987654321)
     assert repo.get_telegram_chat_id() == 987654321
+
+
+# --- Integration: inject conflicting rows, detect ---
+
+def test_integration_detect_conflicts_with_sqlite(conn) -> None:
+    date = "2026-09-10"
+    CalendarEventRepo(conn).insert("gcal-x", "iid-x", f"{date}T06:00:00+00:00", "swim")
+    CalendarEventRepo(conn).insert("gcal-y", "iid-y", f"{date}T09:00:00+00:00", "run")
+
+    moved = [CalendarChange(type="moved", gcal_id="gcal-x", old_scheduled_at="2026-09-09T06:00:00+00:00", new_scheduled_at=f"{date}T06:00:00+00:00")]
+    conflicts = detect_conflicts(conn, moved)
+
+    assert len(conflicts) == 1
+    assert conflicts[0].moved_gcal_id == "gcal-x"
+    assert conflicts[0].conflicting_gcal_id == "gcal-y"
