@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 def main() -> None:
     async def on_startup(app: Application) -> None:
+        scheduler.set_bot(app.bot)
         scheduler.start(settings.database_url)
 
     async def on_shutdown(app: Application) -> None:
