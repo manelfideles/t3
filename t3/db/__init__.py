@@ -335,22 +335,36 @@ class CalendarEventRepo:
 
 
 class SyncStateRepo:
-    """Read/write the sync cursor (last_polled_at) from the sync_state table."""
+    """Read/write the sync cursor and other persistent key-value pairs."""
 
-    _KEY = "last_polled_at"
+    _KEY_LAST_POLLED = "last_polled_at"
+    _KEY_CHAT_ID = "telegram_chat_id"
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
-    def get_last_polled_at(self) -> str | None:
+    def _get(self, key: str) -> str | None:
         row = self._conn.execute(
-            "SELECT value FROM sync_state WHERE key = ?", (self._KEY,)
+            "SELECT value FROM sync_state WHERE key = ?", (key,)
         ).fetchone()
         return row[0] if row else None
 
-    def set_last_polled_at(self, value: str) -> None:
+    def _set(self, key: str, value: str) -> None:
         self._conn.execute(
             "INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            (self._KEY, value),
+            (key, value),
         )
         self._conn.commit()
+
+    def get_last_polled_at(self) -> str | None:
+        return self._get(self._KEY_LAST_POLLED)
+
+    def set_last_polled_at(self, value: str) -> None:
+        self._set(self._KEY_LAST_POLLED, value)
+
+    def get_telegram_chat_id(self) -> int | None:
+        raw = self._get(self._KEY_CHAT_ID)
+        return int(raw) if raw is not None else None
+
+    def set_telegram_chat_id(self, chat_id: int) -> None:
+        self._set(self._KEY_CHAT_ID, str(chat_id))

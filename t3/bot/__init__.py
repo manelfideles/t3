@@ -50,6 +50,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     conn = init_db(settings.database_url)
+    from t3.db import SyncStateRepo as _SyncStateRepo
+
+    _SyncStateRepo(conn).set_telegram_chat_id(message.chat_id)
     if AthleteRepo(conn).load_latest() is not None:
         await message.reply_text(
             "You already have a profile on file. Your training plan is ready — just ask me anything!"

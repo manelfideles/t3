@@ -14,6 +14,39 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class ConflictInfo:
+    moved_gcal_id: str
+    conflicting_gcal_id: str
+    original_time: str
+    new_time: str
+    conflicting_time: str
+
+
+def detect_conflicts(conn: sqlite3.Connection, moved_changes: list[CalendarChange]) -> list[ConflictInfo]:
+    """Return ConflictInfo for each moved event whose new date is shared by another event."""
+    conflicts: list[ConflictInfo] = []
+    for change in moved_changes:
+        if change.type != "moved" or change.new_scheduled_at is None:
+            continue
+        date_prefix = change.new_scheduled_at[:10]
+        rows = conn.execute(
+            "SELECT gcal_id, scheduled_at FROM calendar_events WHERE scheduled_at LIKE ? AND gcal_id != ?",
+            (f"{date_prefix}%", change.gcal_id),
+        ).fetchall()
+        for gcal_id, scheduled_at in rows:
+            conflicts.append(
+                ConflictInfo(
+                    moved_gcal_id=change.gcal_id,
+                    conflicting_gcal_id=gcal_id,
+                    original_time=change.old_scheduled_at or "",
+                    new_time=change.new_scheduled_at,
+                    conflicting_time=scheduled_at,
+                )
+            )
+    return conflicts
+
+
+@dataclass
 class CalendarChange:
     type: Literal["moved", "created", "deleted"]
     gcal_id: str
