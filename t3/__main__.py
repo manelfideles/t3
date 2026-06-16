@@ -4,17 +4,14 @@ from telegram.ext import Application
 
 from t3.bot import create_app
 from t3.config import settings
-from t3.db import init_db
 from t3 import scheduler
 
 logging.basicConfig(level=logging.INFO)
 
 
 def main() -> None:
-    conn = init_db(settings.database_url)
-
     async def on_startup(app: Application) -> None:
-        scheduler.start(conn)
+        scheduler.start(settings.database_url)
 
     async def on_shutdown(app: Application) -> None:
         scheduler.stop()
