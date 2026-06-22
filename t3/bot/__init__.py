@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 
 from google import genai
@@ -11,21 +12,18 @@ from telegram.ext import (
     filters,
 )
 
-from t3.agent import run
+from t3.bot.conversation import handle_turn
 from t3.bot.onboarding import (
-    apply_corrections,
     fetch_profile_from_intervals,
     flush_to_db,
     format_confirmation_message,
 )
 from t3.config import settings
-from t3.db import AthleteRepo, init_db
+from t3.db import AthleteRepo, ConversationState, ConversationStateRepo, SyncStateRepo, init_db
 
 logger = logging.getLogger(__name__)
 
 _client: genai.Client | None = None
-
-_CONFIRMATION_WORDS = frozenset({"yes", "y", "confirm", "ok", "yep", "sure"})
 
 
 def _get_client() -> genai.Client:
@@ -50,9 +48,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     conn = init_db(settings.database_url)
-    from t3.db import SyncStateRepo as _SyncStateRepo
+    SyncStateRepo(conn).set_telegram_chat_id(message.chat_id)
 
-    _SyncStateRepo(conn).set_telegram_chat_id(message.chat_id)
     if AthleteRepo(conn).load_latest() is not None:
         await message.reply_text(
             "You already have a profile on file. Your training plan is ready — just ask me anything!"
@@ -66,49 +63,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await message.reply_text(f"Could not fetch your Intervals.icu data: {exc}")
         return
 
-    if context.user_data is None:
-        return
-    context.user_data["pending_profile"] = profile
-    context.user_data["onboarding_state"] = "AWAITING_CONFIRMATION"
+    payload_json = json.dumps(profile.__dict__)
+    ConversationStateRepo(conn).save(
+        message.chat_id,
+        ConversationState.ONBOARDING_AWAITING_CONFIRMATION,
+        payload_json,
+    )
     await message.reply_text(format_confirmation_message(profile), parse_mode="Markdown")
-
-
-async def _handle_onboarding_reply(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    user_text: str,
-) -> None:
-    message = update.message
-    if message is None or context.user_data is None:
-        return
-
-    pending_profile = context.user_data.get("pending_profile")
-    if pending_profile is None:
-        context.user_data.pop("onboarding_state", None)
-        return
-
-    if user_text.strip().lower() in _CONFIRMATION_WORDS:
-        conn = init_db(settings.database_url)
-        flush_to_db(pending_profile, conn)
-        context.user_data.pop("pending_profile", None)
-        context.user_data.pop("onboarding_state", None)
-        await message.reply_text("Profile saved! Generating your training plan now...")
-        try:
-            from t3.tools.plan import generate_training_plan
-
-            generate_training_plan()
-            await message.reply_text("Your training plan has been generated. Ask me anything to get started!")
-        except Exception as exc:
-            logger.exception("Plan generation error after onboarding")
-            await message.reply_text(f"Profile saved, but plan generation failed: {exc}")
-    else:
-        try:
-            updated = apply_corrections(pending_profile, user_text, _get_client())
-            context.user_data["pending_profile"] = updated
-            await message.reply_text(format_confirmation_message(updated), parse_mode="Markdown")
-        except Exception as exc:
-            logger.exception("Correction parsing error")
-            await message.reply_text(f"Couldn't apply that correction: {exc}. Please try again.")
 
 
 async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -134,79 +95,15 @@ async def connect_gcal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await message.reply_text(f"Error: {exc}")
 
 
-async def _handle_conflict_reply(update: Update, chat_id: int, user_text: str) -> None:
-    from t3.bot.confirmation import (
-        _pending,
-        clear_pending,
-        has_pending,
-        resolve,
-    )
-    from t3.integrations import gcal as gcal_integration
-    from t3.integrations import intervals as intervals_integration
-
-    if not has_pending(chat_id):
-        return
-
-    pending = _pending[chat_id]
-
-    class _GCal:
-        def update_event_time(self, gcal_id: str, new_start: str) -> dict:
-            return gcal_integration.update_event_time(gcal_id, new_start, db_path=settings.database_url)
-
-        def delete_event(self, gcal_id: str) -> None:
-            gcal_integration.delete_event(gcal_id, db_path=settings.database_url)
-
-    class _Intervals:
-        def update_workout_date(self, intervals_id: str, new_date: str) -> dict:
-            return intervals_integration.update_workout_date(intervals_id, new_date)
-
-        def delete_workout(self, intervals_id: str) -> None:
-            intervals_integration.delete_workout(intervals_id)
-
-    try:
-        choice = int(user_text.strip())
-    except ValueError:
-        if update.message:
-            await update.message.reply_text("Please reply with 1, 2, or 3.")
-        return
-
-    conn = init_db(settings.database_url)
-    msg = resolve(choice, pending, conn, _GCal(), _Intervals())
-    clear_pending(chat_id)
-    if update.message:
-        await update.message.reply_text(msg)
-
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
     user_text = update.message.text or ""
     chat_id = update.message.chat_id
 
-    if context.user_data is not None and context.user_data.get("onboarding_state") == "AWAITING_CONFIRMATION":
-        await _handle_onboarding_reply(update, context, user_text)
-        return
-
-    from t3.bot.confirmation import has_pending
-
-    if has_pending(chat_id):
-        await _handle_conflict_reply(update, chat_id, user_text)
-        return
-
-    try:
-        reply = await run(user_text, _get_client())
-        await update.message.reply_text(reply or "I didn't get a response. Try again.")
-    except Exception as exc:
-        logger.exception("Agent error")
-        msg = str(exc)
-        if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-            await update.message.reply_text(
-                "Gemini API rate limit hit. Wait a minute and try again, or check your quota at aistudio.google.com."
-            )
-        elif "503" in msg or "UNAVAILABLE" in msg:
-            await update.message.reply_text("Gemini is overloaded right now. Try again in a few seconds.")
-        else:
-            await update.message.reply_text(f"Something went wrong: {exc}")
+    conn = init_db(settings.database_url)
+    reply = await handle_turn(chat_id, user_text, conn, _get_client())
+    await update.message.reply_text(reply)
 
 
 def create_app() -> Application:

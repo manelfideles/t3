@@ -14,21 +14,6 @@ class PendingConflict:
     conflicting_intervals_id: str | None
 
 
-_pending: dict[int, PendingConflict] = {}
-
-
-def add_pending_conflict(chat_id: int, pending: PendingConflict) -> None:
-    _pending[chat_id] = pending
-
-
-def has_pending(chat_id: int) -> bool:
-    return chat_id in _pending
-
-
-def clear_pending(chat_id: int) -> None:
-    _pending.pop(chat_id, None)
-
-
 def format_prompt(pending: PendingConflict) -> str:
     c = pending.conflict
     return (

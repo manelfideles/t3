@@ -4,24 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from t3.bot.confirmation import (
-    PendingConflict,
-    add_pending_conflict,
-    clear_pending,
-    format_prompt,
-    has_pending,
-    resolve,
-    _pending,
-)
+from t3.bot.confirmation import PendingConflict, format_prompt, resolve
 from t3.db import CalendarEventRepo, init_db
 from t3.sync import ConflictInfo
-
-
-@pytest.fixture(autouse=True)
-def clear_state():
-    _pending.clear()
-    yield
-    _pending.clear()
 
 
 @pytest.fixture()
@@ -45,14 +30,6 @@ def _make_pending() -> PendingConflict:
         moved_intervals_id="iid-moved",
         conflicting_intervals_id="iid-conflict",
     )
-
-
-def test_add_and_has_pending():
-    assert not has_pending(42)
-    add_pending_conflict(42, _make_pending())
-    assert has_pending(42)
-    clear_pending(42)
-    assert not has_pending(42)
 
 
 def test_format_prompt_contains_options():
