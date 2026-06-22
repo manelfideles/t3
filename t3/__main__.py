@@ -11,8 +11,10 @@ logging.basicConfig(level=logging.INFO)
 
 def main() -> None:
     async def on_startup(app: Application) -> None:
-        scheduler.set_bot(app.bot)
-        scheduler.start(settings.database_url)
+        async def _notify(chat_id: int, text: str) -> None:
+            await app.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+
+        scheduler.start(settings.database_url, _notify)
 
     async def on_shutdown(app: Application) -> None:
         scheduler.stop()
