@@ -119,7 +119,7 @@ def test_generate_training_plan_registered_in_registry() -> None:
 
 
 def test_schedule_sessions_computes_absolute_dates() -> None:
-    from t3.tools.plan import schedule_sessions
+    from t3.planner import schedule_sessions
 
     phases = [
         TrainingPlanRow(
@@ -145,7 +145,7 @@ def test_schedule_sessions_computes_absolute_dates() -> None:
 
 
 def test_schedule_sessions_empty_phases_returns_empty() -> None:
-    from t3.tools.plan import schedule_sessions
+    from t3.planner import schedule_sessions
     assert schedule_sessions([]) == []
 
 
@@ -229,16 +229,18 @@ def test_confirm_plan_schedules_sessions(tmp_path) -> None:
     with (
         patch("t3.tools.plan.settings") as mock_settings,
         patch("t3.tools.plan.init_db", side_effect=_fake_init_db),
-        patch("t3.tools.plan.gcal.create_event", side_effect=gcal_responses) as mock_gcal,
-        patch("t3.tools.plan.intervals.create_planned_workout", side_effect=intervals_responses) as mock_intervals,
+        patch("t3.planner.gcal.create_event", side_effect=gcal_responses) as mock_gcal,
+        patch("t3.planner.intervals.create_planned_workout", side_effect=intervals_responses) as mock_intervals,
+        patch("t3.planner.settings") as mock_planner_settings,
     ):
         mock_settings.database_url = db_path
+        mock_planner_settings.database_url = db_path
 
         from t3.tools.plan import confirm_plan
 
         result = confirm_plan()
 
-    assert result == {"scheduled": 2}
+    assert result == {"scheduled": 2, "failed": []}
     assert mock_gcal.call_count == 2
     assert mock_intervals.call_count == 2
 
