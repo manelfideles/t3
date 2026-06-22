@@ -66,7 +66,7 @@ def _build_prompt(profile: AthleteProfileRow, today: date, guide: str) -> str:
 - FTP (watts): {profile.ftp_watts}
 - Threshold run pace (min/km): {profile.threshold_run_pace_per_km}
 - Threshold swim pace (min/100m): {profile.threshold_swim_pace_per_100m}
-- Upcoming races (JSON): {profile.upcoming_races_json}
+- Upcoming races (JSON): {profile.upcoming_races}
 - Injury history: {profile.injury_history}
 
 ## Instructions

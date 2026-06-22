@@ -34,14 +34,14 @@ def test_init_db_adds_missing_columns_to_existing_table(tmp_path) -> None:
     repo = AthleteRepo(conn)
     repo.save_profile(
         name="Alice", age=32, sex="female", experience_level="intermediate",
-        weekly_hours_json=None, ftp_watts=240, threshold_run_pace_per_km=5.2,
+        weekly_hours=None, ftp_watts=240, threshold_run_pace_per_km=5.2,
         threshold_swim_pace_per_100m=2.1, avg_weekly_hours=7.5,
-        upcoming_races_json=None, injury_history=None,
+        upcoming_races=None, injury_history=None,
     )
     assert repo.load_latest() is not None
 
 
-def test_schema_creates_all_five_tables() -> None:
+def test_schema_creates_all_expected_tables() -> None:
     conn = init_db()
     assert get_tables(conn) == EXPECTED_TABLES
 
@@ -75,12 +75,12 @@ def test_athlete_repo_save_and_load_typed_fields() -> None:
         age=32,
         sex="female",
         experience_level="intermediate",
-        weekly_hours_json=None,
+        weekly_hours=None,
         ftp_watts=240,
         threshold_run_pace_per_km=5.2,
         threshold_swim_pace_per_100m=2.1,
         avg_weekly_hours=7.5,
-        upcoming_races_json='[{"name": "City Olympic"}]',
+        upcoming_races=[{"name": "City Olympic"}],
         injury_history=None,
     )
     assert row_id == 1

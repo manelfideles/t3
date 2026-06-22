@@ -15,12 +15,12 @@ def _fixture_profile() -> AthleteProfileRow:
         age=32,
         sex="female",
         experience_level="intermediate",
-        weekly_hours_json=None,
+        weekly_hours=None,
         ftp_watts=240,
         threshold_run_pace_per_km=5.2,
         threshold_swim_pace_per_100m=2.1,
         avg_weekly_hours=7.5,
-        upcoming_races_json='[{"name": "City Olympic", "date": "2026-09-20", "type": "olympic", "priority": "A"}]',
+        upcoming_races=[{"name": "City Olympic", "date": "2026-09-20", "type": "olympic", "priority": "A"}],
         injury_history="None",
     )
 
@@ -49,12 +49,12 @@ def test_generate_training_plan_persists_four_phases(tmp_path) -> None:
         age=profile.age,
         sex=profile.sex,
         experience_level=profile.experience_level,
-        weekly_hours_json=profile.weekly_hours_json,
+        weekly_hours=profile.weekly_hours,
         ftp_watts=profile.ftp_watts,
         threshold_run_pace_per_km=profile.threshold_run_pace_per_km,
         threshold_swim_pace_per_100m=profile.threshold_swim_pace_per_100m,
         avg_weekly_hours=profile.avg_weekly_hours,
-        upcoming_races_json=profile.upcoming_races_json,
+        upcoming_races=profile.upcoming_races,
         injury_history=profile.injury_history,
     )
     conn.close()
@@ -196,12 +196,12 @@ def test_confirm_plan_schedules_sessions(tmp_path) -> None:
         age=profile.age,
         sex=profile.sex,
         experience_level=profile.experience_level,
-        weekly_hours_json=profile.weekly_hours_json,
+        weekly_hours=profile.weekly_hours,
         ftp_watts=profile.ftp_watts,
         threshold_run_pace_per_km=profile.threshold_run_pace_per_km,
         threshold_swim_pace_per_100m=profile.threshold_swim_pace_per_100m,
         avg_weekly_hours=profile.avg_weekly_hours,
-        upcoming_races_json=profile.upcoming_races_json,
+        upcoming_races=profile.upcoming_races,
         injury_history=profile.injury_history,
     )
 
