@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     intervals_athlete_id: str = ""
     intervals_api_key: str = ""
-    poll_interval_seconds: int = 300
+    poll_interval_seconds: int = 15
 
 
 settings = Settings()

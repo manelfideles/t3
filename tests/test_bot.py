@@ -38,6 +38,7 @@ def _make_update(text: str = "") -> tuple[MagicMock, MagicMock]:
     update.message = MagicMock()
     update.message.text = text
     update.message.reply_text = AsyncMock()
+    update.message.chat.send_action = AsyncMock()
     context = MagicMock()
     context.user_data = {}
     return update, context
@@ -322,6 +323,38 @@ async def test_handle_message_routes_to_conflict_when_pending() -> None:
     update.message.reply_text.assert_called_once()
     reply = update.message.reply_text.call_args[0][0]
     assert "Done" in reply or "reverted" in reply
+
+
+@pytest.mark.anyio
+async def test_handle_message_sends_typing_action() -> None:
+    """Typing indicator must fire before the reply — proves the event loop isn't blocked."""
+    import asyncio as _asyncio
+    from telegram.constants import ChatAction
+    from t3.db import init_db as _init_db
+
+    conn = _init_db(":memory:")
+    update, context = _make_update("How many km this week?")
+    update.message.chat_id = 88
+    send_action_calls: list = []
+
+    async def _record_send_action(action):
+        send_action_calls.append(action)
+
+    update.message.chat.send_action = _record_send_action
+
+    async def _slow_run(text, client):
+        await _asyncio.sleep(0.05)
+        return "3km."
+
+    with (
+        patch("t3.bot.init_db", return_value=conn),
+        patch("t3.bot._get_client", return_value=MagicMock()),
+        patch("t3.agent.run", side_effect=_slow_run),
+    ):
+        from t3.bot import handle_message
+        await handle_message(update, context)
+
+    assert ChatAction.TYPING in send_action_calls, "typing action was never sent"
 
 
 @pytest.mark.anyio

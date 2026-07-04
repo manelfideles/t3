@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -14,8 +13,7 @@ from google.genai import types
 from t3.config import settings
 from t3.db import AthleteProfileRow, TrainingPlanRow
 from t3.integrations import gcal, intervals
-
-logger = logging.getLogger(__name__)
+from t3.logger import logger
 
 _GUIDE_PATH = Path(__file__).parent / "knowledge" / "periodization.md"
 
@@ -121,9 +119,9 @@ def schedule_sessions(phases: list[TrainingPlanRow]) -> list[ScheduledSession]:
 
 
 def schedule_plan(conn: sqlite3.Connection, phases: list[TrainingPlanRow]) -> ScheduleResult:
-    from t3.db import CalendarEventRepo
+    from t3.db import CalendarRepo
 
-    calendar_repo = CalendarEventRepo(conn)
+    calendar_repo = CalendarRepo(conn)
     scheduled = 0
     failed: list[FailedSession] = []
 
@@ -153,17 +151,19 @@ def schedule_plan(conn: sqlite3.Connection, phases: list[TrainingPlanRow]) -> Sc
             calendar_repo.insert(
                 gcal_id=gcal_result["id"],
                 intervals_id=intervals_result["id"],
-                scheduled_at=s.session_date.isoformat(),
+                scheduled_at=start_dt.isoformat(),
                 event_type=s.discipline,
             )
             scheduled += 1
         except Exception as exc:
             logger.warning("session %s/%s failed: %s", s.session_date, s.discipline, exc)
-            failed.append(FailedSession(
-                session_date=s.session_date.isoformat(),
-                discipline=s.discipline,
-                error=str(exc),
-            ))
+            failed.append(
+                FailedSession(
+                    session_date=s.session_date.isoformat(),
+                    discipline=s.discipline,
+                    error=str(exc),
+                )
+            )
 
     return ScheduleResult(scheduled=scheduled, failed=failed)
 

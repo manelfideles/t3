@@ -5,15 +5,15 @@ from unittest.mock import MagicMock
 import pytest
 
 from t3.bot.confirmation import PendingConflict, format_prompt, resolve
-from t3.db import CalendarEventRepo, init_db
+from t3.db import CalendarRepo, init_db
 from t3.sync import ConflictInfo
 
 
 @pytest.fixture()
 def conn():
     c = init_db(":memory:")
-    CalendarEventRepo(c).insert("moved-id", "iid-moved", "2026-07-15T06:00:00+00:00", "run")
-    CalendarEventRepo(c).insert("conflict-id", "iid-conflict", "2026-07-15T07:00:00+00:00", "bike")
+    CalendarRepo(c).insert("moved-id", "iid-moved", "2026-07-15T06:00:00+00:00", "run")
+    CalendarRepo(c).insert("conflict-id", "iid-conflict", "2026-07-15T07:00:00+00:00", "bike")
     yield c
     c.close()
 
@@ -74,6 +74,17 @@ def test_resolve_choice_3_removes_moved(conn):
     assert "moved session removed" in msg
 
 
+def test_resolve_choice_4_keeps_both(conn):
+    gcal = MagicMock()
+    ints = MagicMock()
+    msg = resolve(4, _make_pending(), conn, gcal, ints)
+    gcal.update_event_time.assert_not_called()
+    gcal.delete_event.assert_not_called()
+    ints.update_workout_date.assert_not_called()
+    ints.delete_workout.assert_not_called()
+    assert "keeping both" in msg
+
+
 def test_resolve_invalid_choice_returns_message(conn):
     gcal = MagicMock()
     ints = MagicMock()
@@ -85,7 +96,13 @@ def test_resolve_invalid_choice_returns_message(conn):
 
 def test_resolve_choice_1_no_intervals_id(conn):
     pending = PendingConflict(
-        conflict=ConflictInfo("moved-id", "conflict-id", "2026-07-14T06:00:00+00:00", "2026-07-15T06:00:00+00:00", "2026-07-15T07:00:00+00:00"),
+        conflict=ConflictInfo(
+            "moved-id",
+            "conflict-id",
+            "2026-07-14T06:00:00+00:00",
+            "2026-07-15T06:00:00+00:00",
+            "2026-07-15T07:00:00+00:00",
+        ),
         moved_intervals_id=None,
         conflicting_intervals_id=None,
     )

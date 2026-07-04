@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import datetime
 from typing import Any, cast
 
@@ -7,11 +6,10 @@ from google import genai
 from google.genai import types
 
 from t3.config import settings
+from t3.logger import logger
 from t3.tools.registry import REGISTRY
 
 REGISTRY.discover("t3.tools")
-
-logger = logging.getLogger(__name__)
 
 _MAX_TURNS = 5
 _RETRYABLE = {"429", "503", "RESOURCE_EXHAUSTED", "UNAVAILABLE"}
@@ -36,7 +34,8 @@ async def _try_model(
     delay = 2.0
     for attempt in range(4):
         try:
-            return client.models.generate_content(
+            return await asyncio.to_thread(
+                client.models.generate_content,
                 model=model,
                 contents=contents,
                 config=config,
@@ -101,6 +100,8 @@ async def run(text: str, client: genai.Client) -> str:
     for _ in range(_MAX_TURNS):
         response = await generate_response(client, contents, config)
         candidate = response.candidates[0]
+        if candidate.content is None:
+            return response.text or ""
         calls = [part.function_call for part in candidate.content.parts if getattr(part, "function_call", None)]
 
         if not calls:

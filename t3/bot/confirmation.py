@@ -22,8 +22,9 @@ def format_prompt(pending: PendingConflict) -> str:
         f"Choose a resolution:\n"
         f"1️⃣ Revert move — put the moved session back to {c.original_time[:16]}\n"
         f"2️⃣ Keep move, remove other — keep the moved session, delete the conflicting one\n"
-        f"3️⃣ Remove moved — delete the session you just moved\n\n"
-        f"Reply with 1, 2, or 3."
+        f"3️⃣ Remove moved — delete the session you just moved\n"
+        f"4️⃣ Keep both — leave both sessions as-is\n\n"
+        f"Reply with 1, 2, 3, or 4."
     )
 
 
@@ -69,5 +70,7 @@ def resolve(
         if pending.moved_intervals_id:
             intervals.delete_workout(pending.moved_intervals_id)
         return "Done — moved session removed."
+    elif choice == 4:
+        return "OK — keeping both sessions."
     else:
-        return "Invalid choice. Reply with 1, 2, or 3."
+        return "Invalid choice. Reply with 1, 2, 3, or 4."

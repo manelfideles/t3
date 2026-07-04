@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import json
-import logging
 import sqlite3
 
 from google import genai
@@ -13,12 +13,11 @@ from t3.bot.onboarding import (
     flush_to_db,
     format_confirmation_message,
 )
+from t3.config import settings
 from t3.db import ConversationState, ConversationStateRepo
+from t3.logger import logger
 from t3.sync import ConflictInfo
 from t3.tools.plan import generate_training_plan
-from t3.config import settings
-
-logger = logging.getLogger(__name__)
 
 _CONFIRMATION_WORDS = frozenset({"yes", "y", "confirm", "ok", "yep", "sure"})
 
@@ -43,6 +42,7 @@ async def handle_turn(
 
         else:
             from t3.agent import run
+
             return await run(user_text, client) or "I didn't get a response. Try again."
 
     except Exception as exc:
@@ -74,14 +74,14 @@ async def _handle_onboarding(
         flush_to_db(profile, conn)
         repo.save(chat_id, ConversationState.IDLE)
         try:
-            generate_training_plan()
+            await asyncio.to_thread(generate_training_plan)
             return "Profile saved! Your training plan has been generated. Ask me anything to get started!"
         except Exception as exc:
             logger.exception("Plan generation error after onboarding")
             return f"Profile saved, but plan generation failed: {exc}"
     else:
         try:
-            updated = apply_corrections(profile, user_text, client)
+            updated = await asyncio.to_thread(apply_corrections, profile, user_text, client)
             updated_json = json.dumps(updated.__dict__)
             repo.save(chat_id, ConversationState.ONBOARDING_AWAITING_CONFIRMATION, updated_json)
             return format_confirmation_message(updated)
@@ -115,7 +115,7 @@ async def _handle_conflict(
     try:
         choice = int(user_text.strip())
     except ValueError:
-        return "Please reply with 1, 2, or 3."
+        return "Please reply with 1, 2, 3, or 4."
 
     class _GCal:
         def update_event_time(self, gcal_id: str, new_start: str) -> dict:

@@ -1,12 +1,10 @@
-import logging
-
 from telegram.ext import Application
 
+from t3 import scheduler
 from t3.bot import create_app
 from t3.config import settings
-from t3 import scheduler
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level="INFO")
 
 
 def main() -> None:

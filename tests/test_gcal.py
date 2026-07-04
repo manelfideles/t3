@@ -128,6 +128,43 @@ async def test_connect_gcal_handler_timeout() -> None:
     assert "timed out" in last_reply.lower()
 
 
+def test_update_event_time_preserves_duration(monkeypatch: pytest.MonkeyPatch) -> None:
+    from unittest.mock import MagicMock
+
+    from t3.integrations.gcal import update_event_time
+
+    fake_event = {
+        "id": "evt1",
+        "summary": "T3 - Swim",
+        "start": {"dateTime": "2026-06-10T07:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-06-10T08:30:00Z", "timeZone": "UTC"},
+    }
+
+    mock_service = MagicMock()
+    mock_service.calendarList().list().execute.return_value = {
+        "items": [{"summary": "T3", "id": "cal123"}]
+    }
+    mock_service.events().get().execute.return_value = fake_event
+    updated_body: dict = {}
+
+    def capture_update(**kwargs):
+        updated_body.update(kwargs)
+        return MagicMock(**{"execute.return_value": fake_event})
+
+    mock_service.events().update = capture_update
+
+    monkeypatch.setattr("t3.integrations.gcal.CredentialStore", MagicMock())
+    monkeypatch.setattr("t3.integrations.gcal.build", lambda *a, **kw: mock_service)
+
+    update_event_time("evt1", "2026-06-15T07:00:00Z")
+
+    body = updated_body["body"]
+    assert body["start"]["dateTime"] == "2026-06-15T07:00:00Z"
+    # duration was 1.5 h → end must be 08:30, not 07:00
+    assert body["end"]["dateTime"] != body["start"]["dateTime"]
+    assert "2026-06-15T08:30:00" in body["end"]["dateTime"]
+
+
 # --- integration tests ---
 
 

@@ -9,7 +9,7 @@ from google import genai
 
 from t3.config import settings
 from t3.db import AthleteRepo, TrainingPlanRepo, init_db
-from t3.planner import generate_plan, schedule_plan, schedule_sessions
+from t3.planner import generate_plan, schedule_plan
 from t3.tools.registry import tool
 
 

@@ -128,12 +128,25 @@ def create_event(summary: str, start: str, end: str, db_path: str = "t3.db") -> 
 
 
 def update_event_time(gcal_id: str, new_start: str, db_path: str = "t3.db") -> dict:
+    from datetime import datetime, timedelta
+
     creds = CredentialStore(db_path).get_valid()
     service = build("calendar", "v3", credentials=creds)
     calendar_id = _get_calendar(service, T3_CALENDAR_NAME)
     event = service.events().get(calendarId=calendar_id, eventId=gcal_id).execute()
+
+    orig_start_str = event["start"].get("dateTime") or event["start"].get("date", "")
+    orig_end_str = event["end"].get("dateTime") or event["end"].get("date", "")
+    try:
+        duration = datetime.fromisoformat(orig_end_str) - datetime.fromisoformat(orig_start_str)
+    except (ValueError, KeyError):
+        duration = timedelta(hours=1)
+
+    new_start_dt = datetime.fromisoformat(new_start)
+    new_end = (new_start_dt + duration).isoformat()
+
     event["start"] = {"dateTime": new_start, "timeZone": "UTC"}
-    event["end"] = {"dateTime": new_start, "timeZone": "UTC"}
+    event["end"] = {"dateTime": new_end, "timeZone": "UTC"}
     return service.events().update(calendarId=calendar_id, eventId=gcal_id, body=event).execute()
 
 

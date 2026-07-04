@@ -28,10 +28,38 @@ def _fixture_profile() -> AthleteProfileRow:
 def _fixture_plan() -> dict:
     return {
         "phases": [
-            {"name": "Base", "start": "2026-06-11", "end": "2026-07-22", "weeks": 6, "weekly_hours": 7.5, "sessions": []},
-            {"name": "Build", "start": "2026-07-23", "end": "2026-08-19", "weeks": 4, "weekly_hours": 9.0, "sessions": []},
-            {"name": "Peak", "start": "2026-08-20", "end": "2026-09-09", "weeks": 3, "weekly_hours": 8.0, "sessions": []},
-            {"name": "Race", "start": "2026-09-10", "end": "2026-09-20", "weeks": 1, "weekly_hours": 5.0, "sessions": []},
+            {
+                "name": "Base",
+                "start": "2026-06-11",
+                "end": "2026-07-22",
+                "weeks": 6,
+                "weekly_hours": 7.5,
+                "sessions": [],
+            },
+            {
+                "name": "Build",
+                "start": "2026-07-23",
+                "end": "2026-08-19",
+                "weeks": 4,
+                "weekly_hours": 9.0,
+                "sessions": [],
+            },
+            {
+                "name": "Peak",
+                "start": "2026-08-20",
+                "end": "2026-09-09",
+                "weeks": 3,
+                "weekly_hours": 8.0,
+                "sessions": [],
+            },
+            {
+                "name": "Race",
+                "start": "2026-09-10",
+                "end": "2026-09-20",
+                "weeks": 1,
+                "weekly_hours": 5.0,
+                "sessions": [],
+            },
         ]
     }
 
@@ -39,7 +67,8 @@ def _fixture_plan() -> dict:
 def test_generate_training_plan_persists_four_phases(tmp_path) -> None:
     db_path = str(tmp_path / "test.db")
 
-    from t3.db import AthleteRepo, init_db as _init_db
+    from t3.db import AthleteRepo
+    from t3.db import init_db as _init_db
 
     conn = _init_db(db_path)
     repo = AthleteRepo(conn)
@@ -126,11 +155,34 @@ def test_schedule_sessions_computes_absolute_dates() -> None:
             id=1,
             phase="Base",
             blocks_json='{"start": "2026-06-15", "end": "2026-06-28", "weeks": 2, "weekly_hours": 7.5}',
-            sessions_json=json.dumps([
-                {"week": 1, "day": "monday", "discipline": "swim", "type": "easy", "duration_min": 45, "intensity": "low"},
-                {"week": 1, "day": "wednesday", "discipline": "run", "type": "threshold", "duration_min": 60, "intensity": "high"},
-                {"week": 2, "day": "saturday", "discipline": "bike", "type": "long", "duration_min": 120, "intensity": "moderate"},
-            ]),
+            sessions_json=json.dumps(
+                [
+                    {
+                        "week": 1,
+                        "day": "monday",
+                        "discipline": "swim",
+                        "type": "easy",
+                        "duration_min": 45,
+                        "intensity": "low",
+                    },
+                    {
+                        "week": 1,
+                        "day": "wednesday",
+                        "discipline": "run",
+                        "type": "threshold",
+                        "duration_min": 60,
+                        "intensity": "high",
+                    },
+                    {
+                        "week": 2,
+                        "day": "saturday",
+                        "discipline": "bike",
+                        "type": "long",
+                        "duration_min": 120,
+                        "intensity": "moderate",
+                    },
+                ]
+            ),
             created_at="2026-06-12T00:00:00",
         )
     ]
@@ -138,14 +190,15 @@ def test_schedule_sessions_computes_absolute_dates() -> None:
     sessions = schedule_sessions(phases)
 
     assert len(sessions) == 3
-    assert sessions[0].session_date == date(2026, 6, 15)   # week 1, monday
+    assert sessions[0].session_date == date(2026, 6, 15)  # week 1, monday
     assert sessions[0].summary == "swim – easy"
-    assert sessions[1].session_date == date(2026, 6, 17)   # week 1, wednesday
-    assert sessions[2].session_date == date(2026, 6, 27)   # week 2, saturday
+    assert sessions[1].session_date == date(2026, 6, 17)  # week 1, wednesday
+    assert sessions[2].session_date == date(2026, 6, 27)  # week 2, saturday
 
 
 def test_schedule_sessions_empty_phases_returns_empty() -> None:
     from t3.planner import schedule_sessions
+
     assert schedule_sessions([]) == []
 
 
@@ -186,7 +239,8 @@ def _fixture_plan_with_sessions() -> dict:
 def test_confirm_plan_schedules_sessions(tmp_path) -> None:
     db_path = str(tmp_path / "test.db")
 
-    from t3.db import AthleteRepo, CalendarEventRepo, TrainingPlanRepo, init_db as _init_db
+    from t3.db import AthleteRepo, CalendarRepo, TrainingPlanRepo
+    from t3.db import init_db as _init_db
 
     conn = _init_db(db_path)
     athlete_repo = AthleteRepo(conn)
@@ -223,6 +277,7 @@ def test_confirm_plan_schedules_sessions(tmp_path) -> None:
     def _fake_init_db(path):
         nonlocal real_conn
         from t3.db import init_db as _init_db
+
         real_conn = _init_db(path)
         return real_conn
 
@@ -245,5 +300,7 @@ def test_confirm_plan_schedules_sessions(tmp_path) -> None:
     assert mock_intervals.call_count == 2
 
     assert real_conn is not None
-    cal_repo = CalendarEventRepo(real_conn)
+    cal_repo = CalendarRepo(real_conn)
+    assert cal_repo.count() == 2
+    cal_repo = CalendarRepo(real_conn)
     assert cal_repo.count() == 2

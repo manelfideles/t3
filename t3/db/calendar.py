@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 
 
-class CalendarEventRepo:
+class CalendarRepo:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
@@ -25,6 +26,24 @@ class CalendarEventRepo:
         )
         self._conn.commit()
 
-    def all_scheduled_at(self) -> dict[str, str]:
-        rows = self._conn.execute("SELECT gcal_id, scheduled_at FROM calendar_events").fetchall()
-        return {row[0]: row[1] for row in rows}
+    def delete(self, gcal_id: str) -> None:
+        self._conn.execute("DELETE FROM calendar_events WHERE gcal_id = ?", (gcal_id,))
+        self._conn.commit()
+
+    def list_events(
+        self,
+        time_min: str | None = None,
+        time_max: str | None = None,
+    ) -> list:
+        """
+        Fetches all events from `time_min` to `time_max`
+        Defaults to fetching all events within a 1-year period, starting now.
+        """
+        if not time_min:
+            now = datetime.now(timezone.utc).isoformat()
+            time_max = datetime(now.year + 1, now.month, now.day, tzinfo=timezone.utc).isoformat()
+        events = self._conn.execute(
+            "SELECT * FROM calendar_events WHERE scheduled_at BETWEEN ? AND ?",
+            (time_min, time_max),
+        ).fetchall()
+        return events

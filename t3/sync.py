@@ -1,16 +1,30 @@
 from __future__ import annotations
 
-import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Literal
+from enum import StrEnum
+from pprint import pprint
 
 from t3.config import settings
-from t3.db import CalendarEventRepo, SyncStateRepo
+from t3.db import CalendarRepo, SyncStateRepo
 from t3.integrations.gcal import list_events
+from t3.logger import logger
 
-logger = logging.getLogger(__name__)
+
+class CalendarChangeType(StrEnum):
+    MOVED = "moved"
+    CREATED = "created"
+    DELETED = "deleted"
+
+
+@dataclass(frozen=True)
+class CalendarChange:
+    type: CalendarChangeType
+    gcal_id: str
+    old_scheduled_at: str | None
+    new_scheduled_at: str | None
+    title: str = "session"
 
 
 @dataclass
@@ -26,7 +40,7 @@ def detect_conflicts(conn: sqlite3.Connection, moved_changes: list[CalendarChang
     """Return ConflictInfo for each moved event whose new date is shared by another event."""
     conflicts: list[ConflictInfo] = []
     for change in moved_changes:
-        if change.type != "moved" or change.new_scheduled_at is None:
+        if change.type != "moved" or not change.new_scheduled_at:
             continue
         date_prefix = change.new_scheduled_at[:10]
         rows = conn.execute(
@@ -46,60 +60,14 @@ def detect_conflicts(conn: sqlite3.Connection, moved_changes: list[CalendarChang
     return conflicts
 
 
-@dataclass
-class CalendarChange:
-    type: Literal["moved", "created", "deleted"]
-    gcal_id: str
-    old_scheduled_at: str | None
-    new_scheduled_at: str | None
-
-
-def poll_gcal(conn: sqlite3.Connection) -> list[CalendarChange]:
-    sync_repo = SyncStateRepo(conn)
-    event_repo = CalendarEventRepo(conn)
-
-    last_polled_at = sync_repo.get_last_polled_at()
-    now = datetime.now(timezone.utc)
-    now_str = now.isoformat()
-
-    if last_polled_at is None:
-        last_polled_at = now_str
-
-    # One-year window for the mandatory timeMin/timeMax params.
-    time_min = last_polled_at if last_polled_at < now_str else now_str
-    time_max_dt = datetime(now.year + 1, now.month, now.day, tzinfo=timezone.utc)
-    time_max = time_max_dt.isoformat()
-
-    gcal_items = list_events(
-        time_min=time_min,
-        time_max=time_max,
-        db_path=settings.database_url,
-        updated_min=last_polled_at,
-    )
-
-    gcal_map: dict[str, str] = {}
-    for item in gcal_items:
-        gcal_id = item.get("id", "")
-        start = item.get("start", {})
-        scheduled_at = start.get("dateTime") or start.get("date") or ""
-        if gcal_id:
-            gcal_map[gcal_id] = scheduled_at
-
-    db_map = event_repo.all_scheduled_at()
-
-    changes: list[CalendarChange] = []
-    for gcal_id, new_scheduled_at in gcal_map.items():
-        if gcal_id not in db_map:
-            changes.append(CalendarChange(type="created", gcal_id=gcal_id, old_scheduled_at=None, new_scheduled_at=new_scheduled_at))
-        elif db_map[gcal_id] != new_scheduled_at:
-            changes.append(CalendarChange(type="moved", gcal_id=gcal_id, old_scheduled_at=db_map[gcal_id], new_scheduled_at=new_scheduled_at))
-
-    for gcal_id in db_map:
-        if gcal_id not in gcal_map:
-            changes.append(CalendarChange(type="deleted", gcal_id=gcal_id, old_scheduled_at=db_map[gcal_id], new_scheduled_at=None))
-
+def sync_changes(
+    conn: sqlite3.Connection,
+    calendar_repo: CalendarRepo,
+    now_str: str,
+    changes: list[CalendarChange],
+):
     for change in changes:
-        if change.type in ("created", "moved") and change.new_scheduled_at is not None:
+        if change.type != CalendarChangeType.DELETED and change.new_scheduled_at is not None:
             conn.execute(
                 """
                 INSERT INTO calendar_events (gcal_id, scheduled_at, last_synced_at)
@@ -110,15 +78,70 @@ def poll_gcal(conn: sqlite3.Connection) -> list[CalendarChange]:
                 """,
                 (change.gcal_id, change.new_scheduled_at, now_str),
             )
-        elif change.type == "deleted":
-            event_repo.update_last_synced_at(change.gcal_id, now_str)
-
+        else:
+            calendar_repo.delete(change.gcal_id)
+            calendar_repo.update_last_synced_at(change.gcal_id, last_synced_at=now_str)
     conn.commit()
-    sync_repo.set_last_polled_at(now_str)
 
-    if changes:
-        logger.info("poll detected %d change(s): %s", len(changes), [c.type for c in changes])
-    else:
-        logger.debug("poll: no changes detected")
+
+def poll_gcal(conn: sqlite3.Connection) -> list[CalendarChange]:
+    """
+    Fetches all T3 events from today onwards, from both calendars,
+    to synchronize changes across calendars.
+    """
+    sync_repo = SyncStateRepo(conn)
+    calendar_repo = CalendarRepo(conn)
+
+    now = datetime.now(timezone.utc)
+    now_str = now.isoformat()
+
+    today = f"{now_str[:10]}T00:00:00+00:00"
+    time_max = datetime(now.year + 1, now.month, now.day, tzinfo=timezone.utc).isoformat()
+    gcal_events: list[dict[str, str | dict]] = list_events(
+        time_min=today,
+        time_max=time_max,
+        db_path=settings.database_url,
+    )
+    calendar_events: list[tuple] = calendar_repo.list_events(today, time_max)
+
+    changes: list[CalendarChange] = []
+    for gcal_event in gcal_events:
+        if gcal_event["id"] not in [e[1] for e in calendar_events]:
+            changes.append(
+                CalendarChange(
+                    type=CalendarChangeType.CREATED,
+                    gcal_id=gcal_event["id"],
+                    old_scheduled_at=None,
+                    new_scheduled_at=gcal_event["start"]["dateTime"],
+                    title=gcal_event.get("summary"),
+                )
+            )
+        else:
+            _, _, _, scheduled_at, _, _ = list(filter(lambda t: t[1] == gcal_event["id"], calendar_events)).pop(0)
+            if scheduled_at != gcal_event["start"]["dateTime"]:
+                changes.append(
+                    CalendarChange(
+                        type=CalendarChangeType.MOVED,
+                        gcal_id=gcal_event["id"],
+                        old_scheduled_at=scheduled_at,
+                        new_scheduled_at=gcal_event["start"]["dateTime"],
+                        title=gcal_event["summary"],
+                    )
+                )
+
+    for _, gcal_id, _, scheduled_at, _, _ in calendar_events:
+        if gcal_id not in [e["id"] for e in gcal_events]:
+            changes.append(
+                CalendarChange(
+                    type=CalendarChangeType.DELETED,
+                    gcal_id=gcal_id,
+                    old_scheduled_at=scheduled_at,
+                    new_scheduled_at=None,
+                )
+            )
+
+    logger.info("Poll detected %d change(s): %s", len(changes), [c for c in changes])
+    sync_changes(conn, calendar_repo, now_str, changes)
+    sync_repo.set_last_polled_at(now_str)
 
     return changes

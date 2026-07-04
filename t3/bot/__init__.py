@@ -1,9 +1,10 @@
 import asyncio
+import contextlib
 import json
-import logging
 
 from google import genai
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -15,13 +16,17 @@ from telegram.ext import (
 from t3.bot.conversation import handle_turn
 from t3.bot.onboarding import (
     fetch_profile_from_intervals,
-    flush_to_db,
     format_confirmation_message,
 )
 from t3.config import settings
-from t3.db import AthleteRepo, ConversationState, ConversationStateRepo, SyncStateRepo, init_db
-
-logger = logging.getLogger(__name__)
+from t3.db import (
+    AthleteRepo,
+    ConversationState,
+    ConversationStateRepo,
+    SyncStateRepo,
+    init_db,
+)
+from t3.logger import logger
 
 _client: genai.Client | None = None
 
@@ -101,8 +106,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_text = update.message.text or ""
     chat_id = update.message.chat_id
 
-    conn = init_db(settings.database_url)
-    reply = await handle_turn(chat_id, user_text, conn, _get_client())
+    async def _keep_typing() -> None:
+        while True:
+            await update.message.chat.send_action(ChatAction.TYPING)
+            await asyncio.sleep(4)
+
+    typing_task = asyncio.create_task(_keep_typing())
+    try:
+        conn = init_db(settings.database_url)
+        reply = await handle_turn(chat_id, user_text, conn, _get_client())
+    finally:
+        typing_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await typing_task
+
     await update.message.reply_text(reply)
 
 
