@@ -194,11 +194,11 @@ def flush_to_db(profile: IntervalsDerivedProfile, conn: sqlite3.Connection) -> i
         age=profile.age,
         sex=profile.sex,
         experience_level=profile.experience_level,
-        weekly_hours_json=None,
+        weekly_hours=None,
         ftp_watts=profile.ftp_watts,
         threshold_run_pace_per_km=profile.threshold_run_pace_per_km,
         threshold_swim_pace_per_100m=profile.threshold_swim_pace_per_100m,
         avg_weekly_hours=profile.avg_weekly_hours,
-        upcoming_races_json=json.dumps(profile.upcoming_races) if profile.upcoming_races else None,
+        upcoming_races=profile.upcoming_races if profile.upcoming_races else None,
         injury_history=json.dumps(profile.injury_history) if profile.injury_history else None,
     )

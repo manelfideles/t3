@@ -23,12 +23,12 @@ def _fixture_profile() -> AthleteProfileRow:
         age=32,
         sex="female",
         experience_level="intermediate",
-        weekly_hours_json=None,
+        weekly_hours=None,
         ftp_watts=240,
         threshold_run_pace_per_km=5.2,
         threshold_swim_pace_per_100m=2.1,
         avg_weekly_hours=7.5,
-        upcoming_races_json='[{"name": "City Olympic", "date": "2026-09-20", "type": "olympic", "priority": "A"}]',
+        upcoming_races=[{"name": "City Olympic", "date": "2026-09-20", "type": "olympic", "priority": "A"}],
         injury_history="None",
     )
 

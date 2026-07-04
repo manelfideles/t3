@@ -102,6 +102,24 @@ def get_activities(limit: int = 10) -> list[dict[str, Any]]:
         return data[:limit] if isinstance(data, list) else []
 
 
+def update_workout_date(intervals_id: str, new_date: str) -> dict[str, Any]:
+    start_dt = new_date if "T" in new_date else f"{new_date}T08:00:00"
+    with httpx.Client() as client:
+        response = client.put(
+            _url(f"events/{intervals_id}"),
+            auth=_auth(),
+            json={"start_date_local": start_dt},
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+def delete_workout(intervals_id: str) -> None:
+    with httpx.Client() as client:
+        response = client.delete(_url(f"events/{intervals_id}"), auth=_auth())
+        response.raise_for_status()
+
+
 def create_planned_workout(
     date: str,
     workout_type: str,
